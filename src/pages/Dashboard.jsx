@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase, plError, STATUS_FLOW } from '../supabase.js'
+import N8nTest from '../components/N8nTest.jsx'
 
-export default function Dashboard() {
+export default function Dashboard({ profile }) {
   const [state, setState] = useState({ loading: true })
 
   useEffect(() => {
@@ -81,6 +82,7 @@ export default function Dashboard() {
             <dt>Fakty do akceptacji</dt><dd>{state.pendingFacts ?? 0}</dd>
           </dl>
         </div>
+        {profile?.role === 'admin' && <N8nTest />}
       </div>
     </section>
   )

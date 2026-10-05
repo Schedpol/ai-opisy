@@ -43,7 +43,7 @@ export default function App() {
     <HashRouter>
       <Routes>
         <Route element={<Layout profile={profile} />}>
-          <Route index element={<Dashboard />} />
+          <Route index element={<Dashboard profile={profile} />} />
           <Route path="produkty" element={soon('Produkty', 'Etap 2: import z Baselinkera i Excela, rodziny produktów.')} />
           <Route path="wiedza" element={soon('Księga wiedzy', 'Etap 2: wgrywanie DOCX i akceptacja faktów.')} />
           <Route path="szablony" element={soon('Szablony', 'Etap 3: wizualny edytor szablonów.')} />

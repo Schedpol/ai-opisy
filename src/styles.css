@@ -114,3 +114,12 @@ tr:last-child td { border-bottom: 0; }
   .grid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+
+/* Test połączenia z n8n */
+.steps { list-style: none; padding: 0; margin: 4px 0 0; counter-reset: krok; }
+.steps li { counter-increment: krok; position: relative; padding: 7px 0 7px 34px; color: var(--ink-soft); font-size: 14px; }
+.steps li::before { content: counter(krok); position: absolute; left: 0; top: 5px; width: 22px; height: 22px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; font-size: 12px; font-weight: 600; color: var(--ink-soft); background: var(--surface); }
+.steps li.step-active { color: var(--ink); }
+.steps li.step-active::before { border-color: var(--action); color: var(--action); }
+.steps li.step-done { color: var(--ink); }
+.steps li.step-done::before { content: '✓'; background: var(--ok); border-color: var(--ok); color: #fff; }

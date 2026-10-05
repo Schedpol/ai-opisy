@@ -24,3 +24,5 @@ export function plError(message = '') {
   if (message.includes('Failed to fetch')) return 'Brak połączenia z bazą. Sprawdź internet albo adres Supabase w zmiennych repozytorium.'
   return message || 'Nieznany błąd.'
 }
+
+export const N8N_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || ''
