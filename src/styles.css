@@ -190,3 +190,32 @@ label.tech { font-size: 14px; margin-top: 12px; }
 label.tech input { max-width: 520px; }
 @media (max-width: 860px) { .fact { grid-template-columns: 1fr; } }
 .row-form select { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; }
+
+/* Szablony */
+.page.wide { max-width: 1320px; }
+.small { font-size: 13px; }
+.tpl-pick select { min-width: 300px; padding: 9px 12px; }
+.tpl-grid { display: grid; grid-template-columns: minmax(360px, 440px) minmax(0, 1fr); gap: 22px; align-items: start; }
+.sec-row { border-top: 1px solid var(--stone); padding: 12px 0; }
+.sec-row.off > :not(.sec-head) { opacity: .45; }
+.sec-head { display: flex; justify-content: space-between; align-items: center; }
+.sec-move .link-dark { font-size: 16px; padding: 0 6px; }
+label.check { display: flex; align-items: center; gap: 6px; margin: 0; font-weight: 400; }
+label.check input { width: auto; margin: 0; }
+.sec-row > label { margin-top: 8px; font-size: 13.5px; }
+.sec-opts { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 8px; font-size: 13.5px; }
+.img-row { display: flex; gap: 8px; align-items: flex-end; }
+.img-row label { flex: 1; margin-top: 8px; font-size: 13.5px; }
+.btn.upload { margin: 0; padding: 9px 12px; cursor: pointer; font-size: 14px; }
+input[type=color] { padding: 2px; height: 38px; }
+.tpl-preview { position: sticky; top: 20px; }
+.preview-label { font-size: 13px; color: var(--ink-soft); margin-bottom: 8px; }
+.preview-frame { background: #fff; border: 1px solid var(--line); border-radius: var(--radius-m); padding: 24px; max-height: calc(100vh - 80px); overflow: auto; }
+/* Frazy */
+.kw-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; }
+.kw-grid textarea { display: block; width: 100%; margin-top: 6px; font: inherit; font-size: 14px; border: 1px solid var(--line); border-radius: var(--radius-s); padding: 8px 10px; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.gap { margin-left: 14px; }
+@media (max-width: 1080px) { .tpl-grid, .kw-grid { grid-template-columns: 1fr; } .tpl-preview { position: static; } }
+input[hidden] { display: none !important; }
+.img-row label.upload { flex: 0 0 auto; margin-top: 0; }

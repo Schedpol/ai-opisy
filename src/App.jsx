@@ -10,6 +10,8 @@ import Soon from './pages/Soon.jsx'
 import Products from './pages/Products.jsx'
 import Rules from './pages/Rules.jsx'
 import Knowledge from './pages/Knowledge.jsx'
+import Templates from './pages/Templates.jsx'
+import Keywords from './pages/Keywords.jsx'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -50,8 +52,8 @@ export default function App() {
           <Route path="produkty" element={<Products />} />
           <Route path="slownik" element={<Rules profile={profile} />} />
           <Route path="wiedza" element={<Knowledge profile={profile} />} />
-          <Route path="szablony" element={soon('Szablony', 'Etap 3: wizualny edytor szablonów.')} />
-          <Route path="frazy" element={soon('Frazy kluczowe', 'Etap 3: bank fraz RO, HU i BG.')} />
+          <Route path="szablony" element={<Templates profile={profile} />} />
+          <Route path="frazy" element={<Keywords />} />
           <Route path="weryfikacja" element={soon('Weryfikacja', 'Etap 3: oryginał i tłumaczenie PL obok siebie.')} />
           <Route path="publikacja" element={soon('Publikacja', 'Etap 4: zapis opisów do Baselinkera.')} />
           <Route path="reguly" element={soon('Reguły QA', 'Etap 4: zakazane sformułowania i limity.')} />
