@@ -313,3 +313,14 @@ table.rules td.rule-text textarea { width: 100%; font: inherit; font-size: 13.5p
 .tag.st-none { background: var(--stone); color: var(--ink-soft); }
 .tag.st-out { background: transparent; color: var(--ink-soft); border: 1px dashed var(--line); }
 .tree-children .tree-children { padding-left: 18px; }
+/* Jakość danych PIM */
+.quality summary { display: flex; gap: 10px; align-items: center; }
+.q-rules { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.q-chip { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; padding: 4px 10px; cursor: pointer; color: var(--ink); }
+.q-chip span { color: var(--warn); font-weight: 600; margin-left: 4px; }
+.q-chip.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.q-chip.on span { color: #FFD9A8; }
+.q-table { max-height: 360px; overflow: auto; }
+.q-badge { margin-left: 8px; font-size: 11.5px; padding: 1px 7px; }
+.q-issues { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.q-issues .tag { font-size: 11.5px; white-space: normal; }

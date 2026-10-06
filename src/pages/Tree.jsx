@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import Papa from 'papaparse'
 import { supabase, plError } from '../supabase.js'
 import { parseModel } from '../parser.js'
-import { decodeBytes, isPim, rowsFromPim } from '../pim.js'
+import { decodeBytes, isPim, rowsFromPim, RULES } from '../pim.js'
 
 const ST = {
   opublikowany: { label: 'opublikowany', cls: 'st-opublikowany' },
@@ -63,14 +63,15 @@ function Upload({ last, onDone }) {
       setBusy(`Zapisywanie ${rows.length} SKU…`)
       const { data: { session } } = await supabase.auth.getSession()
       const batch = crypto.randomUUID()
-      const uniq = [...new Map(rows.map(r => [r.sku, r])).values()].map(r => ({ category_path: null, technology: null, color: null, shape: null, source: 'csv', ...r, batch_id: batch, uploaded_by: session.user.id, uploaded_at: new Date().toISOString() }))
+      const uniq = [...new Map(rows.map(r => [r.sku, r])).values()].map(r => ({ category_path: null, technology: null, color: null, shape: null, source: 'csv', issues: [], ...r, batch_id: batch, uploaded_by: session.user.id, uploaded_at: new Date().toISOString() }))
       for (let i = 0; i < uniq.length; i += 500) {
         const { error } = await supabase.from('assortment').upsert(uniq.slice(i, i + 500), { onConflict: 'sku' })
         if (error) throw error
       }
       const del = await supabase.from('assortment').delete().neq('batch_id', batch)
       if (del.error) throw del.error
-      setMsg({ type: 'ok', text: `Zapisano ${uniq.length} SKU z pliku ${kind}${dup ? ` (pominięto ${dup} powtórzeń)` : ''}. Poprzednia lista została zastąpiona.${note}` })
+      const withIssues = uniq.filter(r => r.issues?.length).length
+      setMsg({ type: 'ok', text: `Zapisano ${uniq.length} SKU z pliku ${kind}${dup ? ` (pominięto ${dup} powtórzeń)` : ''}. Poprzednia lista została zastąpiona.${kind === 'PIM' ? ` Kontrola jakości: ${withIssues ? `${withIssues} SKU z uwagami – zobacz raport poniżej.` : 'bez uwag.'}` : ''}${note}` })
       onDone()
     } catch (err) { setMsg({ type: 'error', text: plError(err.message) }) } finally { setBusy('') }
   }
@@ -85,6 +86,47 @@ function Upload({ last, onDone }) {
   )
 }
 
+function QualityReport({ rows, rule, setRule }) {
+  const withIssues = rows.filter(r => r.issues?.length)
+  const counts = {}
+  withIssues.forEach(r => new Set(r.issues.map(i => i.code)).forEach(c => { counts[c] = (counts[c] || 0) + 1 }))
+  const list = withIssues.flatMap(r => r.issues.filter(i => !rule || i.code === rule).map(i => ({ ...i, sku: r.sku, name: r.name, path: [r.brand, ...(r.category_path || [r.category])].filter(Boolean).join(' › ') })))
+  function download() {
+    const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`
+    const all = withIssues.flatMap(r => r.issues.map(i => [r.sku, r.name, [r.brand, ...(r.category_path || [r.category])].filter(Boolean).join(' > '), RULES[i.code] || i.code, i.msg]))
+    const csv = '\uFEFF' + [['SKU', 'Nazwa', 'Kategoria', 'Problem', 'Szczegóły'], ...all].map(r => r.map(esc).join(';')).join('\r\n')
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }))
+    a.download = `jakosc-danych-pim-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href)
+  }
+  if (!rows.some(r => r.source === 'pim')) return null
+  return (
+    <details className="panel quality" open={withIssues.length > 0 && withIssues.length < 400}>
+      <summary><strong>Jakość danych PIM</strong> <span className={withIssues.length ? 'tag warn' : 'tag okt'}>{withIssues.length ? `${withIssues.length} SKU z uwagami` : 'bez uwag'}</span></summary>
+      {withIssues.length > 0 && (
+        <>
+          <div className="q-rules">
+            <button className={!rule ? 'q-chip on' : 'q-chip'} onClick={() => setRule('')}>Wszystkie <span>{withIssues.length}</span></button>
+            {Object.entries(RULES).filter(([k]) => counts[k]).map(([k, v]) => (
+              <button key={k} className={rule === k ? 'q-chip on' : 'q-chip'} onClick={() => setRule(rule === k ? '' : k)}>{v} <span>{counts[k]}</span></button>
+            ))}
+          </div>
+          <div className="table-wrap q-table">
+            <table className="compact">
+              <thead><tr><th>SKU</th><th>Problem</th><th>Szczegóły</th><th>Kategoria</th></tr></thead>
+              <tbody>{list.slice(0, 200).map((i, n) => (
+                <tr key={n}><td className="mono">{i.sku}</td><td>{RULES[i.code] || i.code}</td><td className="flags">{i.msg}</td><td className="muted small">{i.path}</td></tr>
+              ))}</tbody>
+            </table>
+            {list.length > 200 && <p className="muted small">Pokazano 200 z {list.length}. Pełna lista jest w raporcie CSV.</p>}
+          </div>
+          <button className="btn ghost" onClick={download}>Pobierz raport CSV</button>
+          <p className="muted small">Raport jest gotowy do przekazania osobie od danych produktowych. Po poprawkach w PIM wgraj nowy eksport – kontrola uruchomi się ponownie.</p>
+        </>
+      )}
+    </details>
+  )
+}
+
 function Bar({ done, total }) {
   return <span className="tree-bar" title={`${done} / ${total}`}><span style={{ width: `${pct(done, total)}%` }} /></span>
 }
@@ -95,13 +137,15 @@ export default function Tree() {
   const [channel, setChannel] = useState('')
   const [q, setQ] = useState('')
   const [onlyMissing, setOnlyMissing] = useState(false)
+  const [onlyIssues, setOnlyIssues] = useState(false)
+  const [rule, setRule] = useState('')
   const [open, setOpen] = useState(new Set())
 
   async function load() {
     const fetchAll = async (table, cols) => { let out = [], from = 0; for (;;) { const { data, error } = await supabase.from(table).select(cols).range(from, from + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) return out; from += 1000 } }
     try {
       const [as, pr, fam, ch, ds] = await Promise.all([
-        fetchAll('assortment', 'sku, name, brand, category, category_path, model, color, shape, technology, source, uploaded_at'), fetchAll('products', 'id, sku, name, family_id'),
+        fetchAll('assortment', 'sku, name, brand, category, category_path, model, color, shape, technology, source, issues, uploaded_at'), fetchAll('products', 'id, sku, name, family_id'),
         fetchAll('product_families', 'id, model_name'), supabase.from('channels').select('id, marketplace, language').eq('active', true),
         fetchAll('descriptions', 'id, channel_id, product_id, version, status'),
       ])
@@ -132,14 +176,15 @@ export default function Tree() {
       if (!r.outside) { total++; if (p) inApp++; d.channels.forEach(c => { if (sts[c.id] === 'opublikowany') perCh[c.id]++ }) }
       if (ql && !`${r.sku} ${r.name}`.toLowerCase().includes(ql)) continue
       if (onlyMissing && sts[channel] === 'opublikowany') continue
+      if (onlyIssues && !(r.issues || []).some(i => !rule || i.code === rule)) continue
       const cats = r.outside ? [] : (r.category_path?.length ? r.category_path : [r.category || '(bez kategorii)'])
       const model = (p && d.fam[p.family_id]) || r.model || '(bez modelu)'
       put([r.outside ? '—' : (r.brand || '(bez marki)'), ...cats, model], { ...r, p, sts, descId })
     }
     const flat = n => [...n.items, ...Object.values(n.children).flatMap(flat)]
-    const count = n => { const all = flat(n); return { total: all.length, done: all.filter(x => x.sts[channel] === 'opublikowany').length } }
+    const count = n => { const all = flat(n); return { total: all.length, done: all.filter(x => x.sts[channel] === 'opublikowany').length, issues: all.filter(x => x.issues?.length).length } }
     return { root, total, inApp, perCh, count, outside: outside.length }
-  }, [d, q, onlyMissing, channel])
+  }, [d, q, onlyMissing, onlyIssues, rule, channel])
 
   if (err) return <section className="page"><h1>Drzewo produktów</h1><p className="error">{err}</p></section>
   if (!d) return <section className="page"><p className="muted">Ładowanie…</p></section>
@@ -147,13 +192,13 @@ export default function Tree() {
   const last = d.as.length ? { at: d.as.reduce((m, r) => r.uploaded_at > m ? r.uploaded_at : m, d.as[0].uploaded_at), count: d.as.length, pim: d.as.some(r => r.source === 'pim') } : null
   const sortKeys = o => Object.keys(o).sort((a, b) => (a === '—') - (b === '—') || a.localeCompare(b, 'pl'))
   const Node = ({ k, label, node, level }) => {
-    const { total, done } = tree.count(node)
+    const { total, done, issues } = tree.count(node)
     const isOpen = open.has(k) || !!q.trim()
     const kids = sortKeys(node.children)
     return (
       <div className={`tree-node lvl-${Math.min(level, 3)}`}>
         <button className="tree-head" onClick={() => toggle(k)} aria-expanded={isOpen}>
-          <span className="caret">{isOpen ? '▾' : '▸'}</span><span className="tree-label">{label}</span>
+          <span className="caret">{isOpen ? '▾' : '▸'}</span><span className="tree-label">{label}{issues > 0 && <span className="tag warn q-badge" title="SKU z uwagami jakości danych PIM">⚠ {issues}</span>}</span>
           <span className="tree-count">{done} / {total}</span><Bar done={done} total={total} />
         </button>
         {isOpen && (
@@ -164,7 +209,8 @@ export default function Tree() {
                 <tbody>{[...node.items].sort((a, b) => a.sku.localeCompare(b.sku)).map(r => (
                   <tr key={r.sku}>
                     <td className="mono">{r.sku}</td>
-                    <td className="tree-name">{r.name}{r.color && <span className="muted small"> · {r.color}</span>}</td>
+                    <td className="tree-name">{r.name}{r.color && <span className="muted small"> · {r.color}</span>}
+                      {r.issues?.length > 0 && <span className="q-issues">{r.issues.map((i, n) => <span key={n} className="tag warn">{RULES[i.code]}: {i.msg}</span>)}</span>}</td>
                     {d.channels.map(c => (
                       <td key={c.id} className={c.id === channel ? 'sel' : ''}>
                         {r.descId[c.id] ? <Link to={`/weryfikacja/${r.descId[c.id]}`} className={`tag ${ST[r.sts[c.id]]?.cls}`}>{c.language.toUpperCase()}: {ST[r.sts[c.id]]?.label}</Link>
@@ -195,10 +241,12 @@ export default function Tree() {
               <div key={c.id} className="panel stat"><span className="big">{pct(tree.perCh[c.id], tree.total)}%</span><span className="muted">opublikowane {c.marketplace} {c.language.toUpperCase()} ({tree.perCh[c.id]})</span></div>
             ))}
           </div>
+          <QualityReport rows={d.as} rule={rule} setRule={r => { setRule(r); if (r) setOnlyIssues(true) }} />
           <div className="tree-tools">
             <div className="seg">{d.channels.map(c => <button key={c.id} className={c.id === channel ? 'seg-btn on' : 'seg-btn'} onClick={() => setChannel(c.id)}>{c.marketplace} {c.language.toUpperCase()}</button>)}</div>
             <input className="tree-search" placeholder="Szukaj SKU albo nazwy…" value={q} onChange={e => setQ(e.target.value)} aria-label="Szukaj" />
             <label className="check small"><input type="checkbox" checked={onlyMissing} onChange={e => setOnlyMissing(e.target.checked)} /> tylko nieopublikowane</label>
+            <label className="check small"><input type="checkbox" checked={onlyIssues} onChange={e => setOnlyIssues(e.target.checked)} /> tylko z uwagami PIM{rule ? ` (${RULES[rule]})` : ''}</label>
             <button className="link-dark" onClick={() => setOpen(new Set(allKeys()))}>Rozwiń wszystko</button>
             <button className="link-dark" onClick={() => setOpen(new Set())}>Zwiń</button>
           </div>
