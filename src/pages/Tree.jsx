@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import Papa from 'papaparse'
 import { supabase, plError } from '../supabase.js'
 import { parseModel } from '../parser.js'
+import { decodeBytes, isPim, rowsFromPim } from '../pim.js'
 
 const ST = {
   opublikowany: { label: 'opublikowany', cls: 'st-opublikowany' },
@@ -31,39 +32,53 @@ function rowsFromCsv(data) {
 
 function Upload({ last, onDone }) {
   const [busy, setBusy] = useState(''); const [msg, setMsg] = useState(null)
-  function pick(e) {
+  const [isOpen, setIsOpen] = useState(!last)
+  async function pick(e) {
     const file = e.target.files?.[0]; e.target.value = ''; if (!file) return
-    setMsg(null)
-    const reader = new FileReader()
-    reader.onload = async () => {
-      const text = String(reader.result)
-      const { data } = Papa.parse(text, { header: true, skipEmptyLines: true, delimitersToGuess: [';', ',', '\t'] })
-      const rows = rowsFromCsv(data)
-      if (!rows.length) { setMsg({ type: 'error', text: 'Nie znaleziono kolumny z SKU (produkt_sku albo sku).' }); return }
+    setMsg(null); setBusy('Odczytywanie pliku…')
+    try {
+      const buf = await file.arrayBuffer()
+      let table, note = ''
+      if (/\.xlsx?$/i.test(file.name)) {
+        const XLSX = await import('xlsx')
+        const wb = XLSX.read(buf, { type: 'array' })
+        table = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' })
+      } else {
+        const dec = decodeBytes(buf)
+        if (dec.fixed) note = ' Naprawiono uszkodzone polskie znaki w pliku.'
+        if (dec.lossy) note = ' Uwaga: część polskich znaków w pliku jest nie do odzyskania – wyeksportuj plik ponownie w UTF-8.'
+        table = Papa.parse(dec.text, { header: false, skipEmptyLines: true, delimitersToGuess: ['\t', ';', ','] }).data
+      }
+      let rows, kind
+      if (isPim(table)) {
+        const res = rowsFromPim(table)
+        if (res.badLayout) throw new Error('Plik wygląda jak eksport PIM, ale kolumny są przesunięte (np. EAN nie jest w oczekiwanym miejscu). Daj znać – trzeba poprawić mapowanie kolumn.')
+        rows = res.rows; kind = 'PIM'
+      } else {
+        const [head, ...body] = table
+        rows = rowsFromCsv(body.map(r => Object.fromEntries(head.map((h, i) => [String(h).trim(), r[i]])))); kind = 'CSV'
+      }
+      if (!rows.length) throw new Error('Nie znaleziono produktów. Obsługiwane: eksport z PIM albo CSV z kolumną produkt_sku / sku.')
       const dup = rows.length - new Set(rows.map(r => r.sku)).size
-      try {
-        setBusy(`Zapisywanie ${rows.length} SKU…`)
-        const { data: { session } } = await supabase.auth.getSession()
-        const batch = crypto.randomUUID()
-        const uniq = [...new Map(rows.map(r => [r.sku, r])).values()].map(r => ({ ...r, batch_id: batch, uploaded_by: session.user.id, uploaded_at: new Date().toISOString() }))
-        for (let i = 0; i < uniq.length; i += 500) {
-          const { error } = await supabase.from('assortment').upsert(uniq.slice(i, i + 500), { onConflict: 'sku' })
-          if (error) throw error
-        }
-        const del = await supabase.from('assortment').delete().neq('batch_id', batch)
-        if (del.error) throw del.error
-        const warn = /\p{L}\?\p{L}/u.test(text) ? ' Uwaga: plik ma uszkodzone polskie znaki (eksport bez UTF-8) – nazwy mogą zawierać „?”.' : ''
-        setMsg({ type: 'ok', text: `Zapisano ${uniq.length} SKU${dup ? ` (pominięto ${dup} powtórzeń)` : ''}. Produkty spoza pliku usunięto z listy asortymentu.${warn}` })
-        onDone()
-      } catch (err) { setMsg({ type: 'error', text: plError(err.message) }) } finally { setBusy('') }
-    }
-    reader.readAsText(file, 'utf-8')
+      setBusy(`Zapisywanie ${rows.length} SKU…`)
+      const { data: { session } } = await supabase.auth.getSession()
+      const batch = crypto.randomUUID()
+      const uniq = [...new Map(rows.map(r => [r.sku, r])).values()].map(r => ({ category_path: null, technology: null, color: null, shape: null, source: 'csv', ...r, batch_id: batch, uploaded_by: session.user.id, uploaded_at: new Date().toISOString() }))
+      for (let i = 0; i < uniq.length; i += 500) {
+        const { error } = await supabase.from('assortment').upsert(uniq.slice(i, i + 500), { onConflict: 'sku' })
+        if (error) throw error
+      }
+      const del = await supabase.from('assortment').delete().neq('batch_id', batch)
+      if (del.error) throw del.error
+      setMsg({ type: 'ok', text: `Zapisano ${uniq.length} SKU z pliku ${kind}${dup ? ` (pominięto ${dup} powtórzeń)` : ''}. Poprzednia lista została zastąpiona.${note}` })
+      onDone()
+    } catch (err) { setMsg({ type: 'error', text: plError(err.message) }) } finally { setBusy('') }
   }
   return (
-    <details className="panel upload-panel" open={!last}>
-      <summary><strong>Lista asortymentu</strong> <span className="muted small">{last ? `wgrana ${new Date(last.at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })} · ${last.count} SKU` : 'jeszcze nie wgrana'}</span></summary>
-      <p className="muted small">Wgraj CSV ze wszystkimi produktami (eksport z Baselinkera albo plik z kolumnami sku, nazwa, kategoria, marka). Lista służy tylko do podglądu pokrycia – nie tworzy produktów do generowania opisów. Nowy plik zastępuje poprzednią listę.</p>
-      <label>Plik CSV (UTF-8)<input type="file" accept=".csv,text/csv" onChange={pick} disabled={!!busy} /></label>
+    <details className="panel upload-panel" open={isOpen} onToggle={e => setIsOpen(e.currentTarget.open)}>
+      <summary><strong>Lista asortymentu</strong> <span className="muted small">{last ? `wgrana ${new Date(last.at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })} · ${last.count} SKU${last.pim ? ' · z PIM' : ''}` : 'jeszcze nie wgrana'}</span></summary>
+      <p className="muted small">Wgraj eksport z PIM (CSV, TSV albo XLSX) – struktura drzewa powstanie ze ścieżki kategorii PIM. Działa też CSV z Baselinkera. Lista służy tylko do podglądu pokrycia i nie tworzy produktów do generowania opisów. Nowy plik zastępuje poprzednią listę.</p>
+      <label>Plik z asortymentem<input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" onChange={pick} disabled={!!busy} /></label>
       {busy && <p className="muted" role="status">{busy}</p>}
       {msg && <p className={msg.type} role="status">{msg.text}</p>}
     </details>
@@ -86,7 +101,7 @@ export default function Tree() {
     const fetchAll = async (table, cols) => { let out = [], from = 0; for (;;) { const { data, error } = await supabase.from(table).select(cols).range(from, from + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) return out; from += 1000 } }
     try {
       const [as, pr, fam, ch, ds] = await Promise.all([
-        fetchAll('assortment', 'sku, name, brand, category, model, uploaded_at'), fetchAll('products', 'id, sku, family_id'),
+        fetchAll('assortment', 'sku, name, brand, category, category_path, model, color, shape, technology, source, uploaded_at'), fetchAll('products', 'id, sku, name, family_id'),
         fetchAll('product_families', 'id, model_name'), supabase.from('channels').select('id, marketplace, language').eq('active', true),
         fetchAll('descriptions', 'id, channel_id, product_id, version, status'),
       ])
@@ -104,59 +119,68 @@ export default function Tree() {
     if (!d) return null
     const status = (p, chId) => { if (!p) return 'poza_aplikacja'; const x = d.latest[`${chId}|${p.id}`]; return x ? x.status : 'brak_opisu' }
     const ql = q.trim().toLowerCase()
-    const root = {}
+    const root = { children: {}, items: [] }
     let total = 0, inApp = 0
     const perCh = Object.fromEntries(d.channels.map(c => [c.id, 0]))
-    for (const r of d.as) {
+    const put = (path, item) => { let n = root; for (const k of path) n = (n.children[k] ||= { children: {}, items: [] }); n.items.push(item) }
+    const inAssort = new Set(d.as.map(r => r.sku))
+    const outside = Object.values(d.products).filter(p => !inAssort.has(p.sku)).map(p => ({ sku: p.sku, name: p.name, model: d.fam[p.family_id], outside: true }))
+    for (const r of [...d.as, ...outside]) {
       const p = d.products[r.sku]
       const sts = Object.fromEntries(d.channels.map(c => [c.id, status(p, c.id)]))
       const descId = Object.fromEntries(d.channels.map(c => [c.id, p ? d.latest[`${c.id}|${p.id}`]?.id : null]))
-      total++; if (p) inApp++
-      d.channels.forEach(c => { if (sts[c.id] === 'opublikowany') perCh[c.id]++ })
+      if (!r.outside) { total++; if (p) inApp++; d.channels.forEach(c => { if (sts[c.id] === 'opublikowany') perCh[c.id]++ }) }
       if (ql && !`${r.sku} ${r.name}`.toLowerCase().includes(ql)) continue
       if (onlyMissing && sts[channel] === 'opublikowany') continue
-      const brand = r.brand || '(bez marki)', cat = r.category || '(bez kategorii)', model = (p && d.fam[p.family_id]) || r.model || '(bez modelu)'
-      const b = (root[brand] ||= {}), c = (b[cat] ||= {}), m = (c[model] ||= [])
-      m.push({ ...r, p, sts, descId })
+      const cats = r.outside ? [] : (r.category_path?.length ? r.category_path : [r.category || '(bez kategorii)'])
+      const model = (p && d.fam[p.family_id]) || r.model || '(bez modelu)'
+      put([r.outside ? '—' : (r.brand || '(bez marki)'), ...cats, model], { ...r, p, sts, descId })
     }
-    const count = items => ({ total: items.length, done: items.filter(x => x.sts[channel] === 'opublikowany').length })
-    const flat = obj => Array.isArray(obj) ? obj : Object.values(obj).flatMap(flat)
-    return { root, total, inApp, perCh, count: node => count(flat(node)) }
+    const flat = n => [...n.items, ...Object.values(n.children).flatMap(flat)]
+    const count = n => { const all = flat(n); return { total: all.length, done: all.filter(x => x.sts[channel] === 'opublikowany').length } }
+    return { root, total, inApp, perCh, count, outside: outside.length }
   }, [d, q, onlyMissing, channel])
 
   if (err) return <section className="page"><h1>Drzewo produktów</h1><p className="error">{err}</p></section>
   if (!d) return <section className="page"><p className="muted">Ładowanie…</p></section>
   const toggle = k => { const n = new Set(open); n.has(k) ? n.delete(k) : n.add(k); setOpen(n) }
-  const last = d.as.length ? { at: d.as.reduce((m, r) => r.uploaded_at > m ? r.uploaded_at : m, d.as[0].uploaded_at), count: d.as.length } : null
-  const sortKeys = o => Object.keys(o).sort((a, b) => a.localeCompare(b, 'pl'))
+  const last = d.as.length ? { at: d.as.reduce((m, r) => r.uploaded_at > m ? r.uploaded_at : m, d.as[0].uploaded_at), count: d.as.length, pim: d.as.some(r => r.source === 'pim') } : null
+  const sortKeys = o => Object.keys(o).sort((a, b) => (a === '—') - (b === '—') || a.localeCompare(b, 'pl'))
   const Node = ({ k, label, node, level }) => {
     const { total, done } = tree.count(node)
     const isOpen = open.has(k) || !!q.trim()
+    const kids = sortKeys(node.children)
     return (
-      <div className={`tree-node lvl-${level}`}>
+      <div className={`tree-node lvl-${Math.min(level, 3)}`}>
         <button className="tree-head" onClick={() => toggle(k)} aria-expanded={isOpen}>
           <span className="caret">{isOpen ? '▾' : '▸'}</span><span className="tree-label">{label}</span>
           <span className="tree-count">{done} / {total}</span><Bar done={done} total={total} />
         </button>
-        {isOpen && (Array.isArray(node) ? (
-          <table className="compact tree-skus">
-            <tbody>{node.sort((a, b) => a.sku.localeCompare(b.sku)).map(r => (
-              <tr key={r.sku}>
-                <td className="mono">{r.sku}</td><td className="tree-name">{r.name}</td>
-                {d.channels.map(c => (
-                  <td key={c.id} className={c.id === channel ? 'sel' : ''}>
-                    {r.descId[c.id] ? <Link to={`/weryfikacja/${r.descId[c.id]}`} className={`tag ${ST[r.sts[c.id]]?.cls}`}>{c.language.toUpperCase()}: {ST[r.sts[c.id]]?.label}</Link>
-                      : <span className={`tag ${ST[r.sts[c.id]]?.cls}`}>{c.language.toUpperCase()}: {ST[r.sts[c.id]]?.label}</span>}
-                  </td>
-                ))}
-              </tr>
-            ))}</tbody>
-          </table>
-        ) : <div className="tree-children">{sortKeys(node).map(x => <Node key={k + '|' + x} k={k + '|' + x} label={x} node={node[x]} level={level + 1} />)}</div>)}
+        {isOpen && (
+          <>
+            {kids.length > 0 && <div className="tree-children">{kids.map(x => <Node key={k + '|' + x} k={k + '|' + x} label={x} node={node.children[x]} level={level + 1} />)}</div>}
+            {node.items.length > 0 && (
+              <table className="compact tree-skus">
+                <tbody>{[...node.items].sort((a, b) => a.sku.localeCompare(b.sku)).map(r => (
+                  <tr key={r.sku}>
+                    <td className="mono">{r.sku}</td>
+                    <td className="tree-name">{r.name}{r.color && <span className="muted small"> · {r.color}</span>}</td>
+                    {d.channels.map(c => (
+                      <td key={c.id} className={c.id === channel ? 'sel' : ''}>
+                        {r.descId[c.id] ? <Link to={`/weryfikacja/${r.descId[c.id]}`} className={`tag ${ST[r.sts[c.id]]?.cls}`}>{c.language.toUpperCase()}: {ST[r.sts[c.id]]?.label}</Link>
+                          : <span className={`tag ${ST[r.sts[c.id]]?.cls}`}>{c.language.toUpperCase()}: {ST[r.sts[c.id]]?.label}</span>}
+                      </td>
+                    ))}
+                  </tr>
+                ))}</tbody>
+              </table>
+            )}
+          </>
+        )}
       </div>
     )
   }
-  const allKeys = () => { const ks = []; const walk = (o, k) => { if (Array.isArray(o)) return; for (const x of Object.keys(o)) { ks.push(k + '|' + x); walk(o[x], k + '|' + x) } }; walk(tree.root, ''); return ks }
+  const allKeys = () => { const ks = []; const walk = (n, k) => { for (const x of Object.keys(n.children)) { const kk = k ? k + '|' + x : x; ks.push(kk); walk(n.children[x], kk) } }; walk(tree.root, ''); return ks }
 
   return (
     <section className="page wide">
@@ -179,9 +203,10 @@ export default function Tree() {
             <button className="link-dark" onClick={() => setOpen(new Set())}>Zwiń</button>
           </div>
           <p className="muted small">Pasek i licznik przy każdej gałęzi: opublikowane w wybranym kanale / wszystkie SKU. Kliknij status przy SKU, żeby otworzyć opis.</p>
+          {tree.outside > 0 && <p className="hint">{tree.outside} SKU jest w aplikacji, ale nie ma ich na liście asortymentu – znajdziesz je w gałęzi „Produkty w aplikacji spoza listy”. Sprawdź, czy lista z PIM jest kompletna.</p>}
           <div className="panel tree">
-            {Object.keys(tree.root).length === 0 ? <p className="muted">Nic nie pasuje do filtrów.</p>
-              : sortKeys(tree.root).map(b => <Node key={b} k={b} label={b} node={tree.root[b]} level={0} />)}
+            {Object.keys(tree.root.children).length === 0 ? <p className="muted">Nic nie pasuje do filtrów.</p>
+              : sortKeys(tree.root.children).map(b => <Node key={b} k={b} label={b === '—' ? 'Produkty w aplikacji spoza listy' : b} node={tree.root.children[b]} level={0} />)}
           </div>
         </>
       )}

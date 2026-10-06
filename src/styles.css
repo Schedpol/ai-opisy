@@ -312,3 +312,4 @@ table.rules td.rule-text textarea { width: 100%; font: inherit; font-size: 13.5p
 .tree-skus td:not(.sel) .tag { opacity: .7; }
 .tag.st-none { background: var(--stone); color: var(--ink-soft); }
 .tag.st-out { background: transparent; color: var(--ink-soft); border: 1px dashed var(--line); }
+.tree-children .tree-children { padding-left: 18px; }
