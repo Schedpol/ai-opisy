@@ -30,7 +30,8 @@ export async function buildContext(familyId, channelId) {
   const keywords = (bank?.keywords || []).filter(k => !excluded.has(k.kw)).map(k => ({ kw: k.kw, volume: k.volume }))
   if (!keywords.length) problems.push(`Bank fraz „${family.category} · ${channel.language.toUpperCase()}” jest pusty – odśwież go (Frazy kluczowe).`)
   return { problems, family, channel, brand: br.data, template, product, facts: famFacts, keywords, library: lib.data || [],
-    forbidden: (rules.data || []).filter(r => ['zakazany_wzorzec', 'marka_konkurencji'].includes(r.rule_type) && (!r.language || r.language === channel.language)).map(r => r.pattern) }
+    forbidden: (rules.data || []).filter(r => ['zakazany_wzorzec', 'marka_konkurencji'].includes(r.rule_type) && (!r.language || r.language === channel.language)).map(r => r.pattern),
+    instructions: (rules.data || []).filter(r => r.rule_type === 'instrukcja' && (!r.language || r.language === channel.language)).map(r => r.pattern) }
 }
 
 function payloadFrom(ctx, extra) {
@@ -42,7 +43,7 @@ function payloadFrom(ctx, extra) {
     facts: ctx.facts.map(f => f.content), keywords: ctx.keywords.slice(0, 150),
     template: { sections, styles: ctx.template.styles },
     images: resolveImages(ctx.template, { brand_id: ctx.family.brand_id, family: ctx.family, product: ctx.product, library: ctx.library }),
-    limits: ctx.channel.limits || {}, forbidden: ctx.forbidden,
+    limits: ctx.channel.limits || {}, forbidden: ctx.forbidden, instructions: ctx.instructions,
     title_pattern: '[typ produktu] [marka] [model], [wymiary] cm, [materiał], [kolor/wykończenie] – zgodnie ze standardem nazw eMAG',
     ...extra,
   }
@@ -81,9 +82,13 @@ export async function regenerateSections(desc, sections, comments, general, onCr
   const ctx = await buildContext(desc.family_id, desc.channel_id)
   if (!ctx.template) throw new Error('Brak aktywnego szablonu')
   const { data: { session } } = await supabase.auth.getSession()
-  const rows = comments.filter(c => c.text.trim()).map(c => ({ description_id: desc.id, section_key: c.section, content: c.text.trim(), author: session.user.id }))
-  if (general.trim()) rows.push({ description_id: desc.id, section_key: null, content: general.trim(), author: session.user.id })
-  if (rows.length) await supabase.from('review_comments').insert(rows)
+  const rows = comments.filter(c => c.text.trim()).map(c => ({ description_id: desc.id, section_key: c.section, content: c.text.trim(), make_rule: !!c.rule, author: session.user.id }))
+  if (general.trim()) rows.push({ description_id: desc.id, section_key: null, content: general.trim(), make_rule: false, author: session.user.id })
+  if (rows.length) {
+    const { data: saved } = await supabase.from('review_comments').insert(rows).select('id, content, make_rule')
+    const proposals = (saved || []).filter(c => c.make_rule).map(c => ({ rule_type: 'instrukcja', pattern: c.content, language: ctx.channel.language, source_comment_id: c.id, status: 'propozycja', created_by: session.user.id }))
+    if (proposals.length) await supabase.from('qa_rules').insert(proposals)
+  }
   await supabase.from('descriptions').update({ status: 'poprawki' }).eq('id', desc.id)
   const ins = await supabase.from('descriptions').insert({ family_id: desc.family_id, product_id: desc.product_id, channel_id: desc.channel_id, template_id: ctx.template.id,
     is_base: desc.is_base, parent_id: desc.parent_id, version: desc.version + 1, fields: desc.fields, translation_pl: desc.translation_pl, meta: desc.meta,
@@ -121,7 +126,7 @@ export async function generateVariants(base, { onlyMissing = true } = {}) {
   const common = {
     market: `${ctx.channel.marketplace} ${ctx.channel.language.toUpperCase()}`, language: ctx.channel.language, brand: ctx.brand.name,
     family: { model_name: ctx.family.model_name, series: ctx.family.series, category: ctx.family.category },
-    facts: ctx.facts.map(f => f.content), keywords: ctx.keywords.slice(0, 80), limits: ctx.channel.limits || {}, forbidden: ctx.forbidden,
+    facts: ctx.facts.map(f => f.content), keywords: ctx.keywords.slice(0, 80), limits: ctx.channel.limits || {}, forbidden: ctx.forbidden, instructions: ctx.instructions,
     template: { sections: ctx.template.sections.filter(s => s && s.enabled !== false), styles: ctx.template.styles },
     base: { sku: baseProduct.sku, attributes: baseProduct.attributes, fields: base.fields, translation_pl: base.translation_pl, keyword_map: base.meta?.keyword_map, approved_by: base.approved_by },
   }

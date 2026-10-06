@@ -88,6 +88,7 @@ function ReviewDetail({ id, profile }) {
   const [versions, setVersions] = useState([])
   const [sel, setSel] = useState({})
   const [comments, setComments] = useState({})
+  const [asRule, setAsRule] = useState({})
   const [general, setGeneral] = useState('')
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
@@ -114,7 +115,7 @@ function ReviewDetail({ id, profile }) {
     clearTimeout(timer.current)
     if (pending) timer.current = setTimeout(load, 5000)
   }
-  useEffect(() => { setSel({}); setComments({}); setGeneral(''); setErr(''); load(); return () => clearTimeout(timer.current) }, [id])
+  useEffect(() => { setSel({}); setComments({}); setAsRule({}); setGeneral(''); setErr(''); load(); return () => clearTimeout(timer.current) }, [id])
 
   async function accept() {
     setBusy('accept'); setErr('')
@@ -131,7 +132,7 @@ function ReviewDetail({ id, profile }) {
     const sections = Object.keys(sel).filter(k => sel[k])
     setBusy('regen'); setErr('')
     try {
-      await regenerateSections(d, sections, sections.map(s => ({ section: s, text: comments[s] || '' })), general, newId => nav(`/weryfikacja/${newId}`))
+      await regenerateSections(d, sections, sections.map(s => ({ section: s, text: comments[s] || '', rule: !!asRule[s] })), general, newId => nav(`/weryfikacja/${newId}`))
     } catch (e) { setErr(e.message) } finally { setBusy('') }
   }
 
@@ -207,7 +208,10 @@ function ReviewDetail({ id, profile }) {
                   <div><label className="check">{editable && <input type="checkbox" checked={!!sel[b.key]} onChange={e => setSel({ ...sel, [b.key]: e.target.checked })} />}<strong>{b.label}</strong></label></div>
                   <div><Fields keys={b.keys} data={d.fields} /></div>
                   <div className="pl"><Fields keys={b.keys} data={d.translation_pl} /></div>
-                  <div>{editable && <textarea rows={3} placeholder="Co poprawić?" value={comments[b.key] || ''} onChange={e => { setComments({ ...comments, [b.key]: e.target.value }); if (e.target.value && !sel[b.key]) setSel({ ...sel, [b.key]: true }) }} />}</div>
+                  <div>{editable && <>
+                    <textarea rows={3} placeholder="Co poprawić?" value={comments[b.key] || ''} onChange={e => { setComments({ ...comments, [b.key]: e.target.value }); if (e.target.value && !sel[b.key]) setSel({ ...sel, [b.key]: true }) }} />
+                    {(comments[b.key] || '').trim() && <label className="check small rule-check"><input type="checkbox" checked={!!asRule[b.key]} onChange={e => setAsRule({ ...asRule, [b.key]: e.target.checked })} /> zaproponuj jako stałą zasadę</label>}
+                  </>}</div>
                 </div>
               ))}
               {editable && (
