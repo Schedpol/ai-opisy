@@ -1,7 +1,7 @@
 import { supabase } from './supabase.js'
 import { applies } from './knowledge.js'
 import { resolveImages } from './render.js'
-import { runJob } from './jobs.js'
+import { runJob, startJob } from './jobs.js'
 
 const MARKET = c => `${c.marketplace} ${c.language.toUpperCase()}`
 
@@ -97,4 +97,44 @@ export async function regenerateSections(desc, sections, comments, general, onCr
   }))
   await supabase.from('review_comments').update({ status: 'uwzgledniona' }).eq('description_id', desc.id).eq('status', 'otwarta')
   return ins.data.id
+}
+
+// Warianty z zaakceptowanego opisu bazowego: paczki po 6 SKU w jednym wykonaniu n8n
+export async function generateVariants(base, { onlyMissing = true } = {}) {
+  const ctx = await buildContext(base.family_id, base.channel_id)
+  if (!ctx.template) throw new Error('Brak aktywnego szablonu')
+  if (base.status !== 'zaakceptowany') throw new Error('Najpierw zaakceptuj opis bazowy')
+  const [{ data: products }, { data: existing }, { data: baseProduct }] = await Promise.all([
+    supabase.from('products').select('*').eq('family_id', base.family_id),
+    supabase.from('descriptions').select('product_id, version, status').eq('family_id', base.family_id).eq('channel_id', base.channel_id).eq('is_base', false).order('version', { ascending: false }),
+    supabase.from('products').select('*').eq('id', base.product_id).single(),
+  ])
+  const latest = {}
+  for (const d of existing || []) if (!latest[d.product_id]) latest[d.product_id] = d
+  const todo = (products || []).filter(p => p.id !== base.product_id && (!onlyMissing || !['zaakceptowany', 'opublikowany', 'generowanie'].includes(latest[p.id]?.status)))
+  if (!todo.length) return 0
+  const { data: { session } } = await supabase.auth.getSession()
+  const rows = todo.map(p => ({ family_id: base.family_id, product_id: p.id, channel_id: base.channel_id, template_id: ctx.template.id, is_base: false,
+    parent_id: base.id, version: (latest[p.id]?.version || 0) + 1, status: 'generowanie', created_by: session.user.id }))
+  const { data: created, error } = await supabase.from('descriptions').insert(rows).select('id, product_id')
+  if (error) throw new Error(error.message)
+  const common = {
+    market: `${ctx.channel.marketplace} ${ctx.channel.language.toUpperCase()}`, language: ctx.channel.language, brand: ctx.brand.name,
+    family: { model_name: ctx.family.model_name, series: ctx.family.series, category: ctx.family.category },
+    facts: ctx.facts.map(f => f.content), keywords: ctx.keywords.slice(0, 80), limits: ctx.channel.limits || {}, forbidden: ctx.forbidden,
+    template: { sections: ctx.template.sections.filter(s => s && s.enabled !== false), styles: ctx.template.styles },
+    base: { sku: baseProduct.sku, attributes: baseProduct.attributes, fields: base.fields, translation_pl: base.translation_pl, keyword_map: base.meta?.keyword_map, approved_by: base.approved_by },
+  }
+  const byId = Object.fromEntries(todo.map(p => [p.id, p]))
+  const variants = created.map(c => { const p = byId[c.product_id]; return { description_id: c.id, sku: p.sku, attributes: p.attributes,
+    images: resolveImages(ctx.template, { brand_id: ctx.family.brand_id, family: ctx.family, product: p, library: ctx.library }) } })
+  for (let i = 0; i < variants.length; i += 6) {
+    const chunk = variants.slice(i, i + 6)
+    try { await startJob('generate_variants', { ...common, variants: chunk }) }
+    catch (e) {
+      await supabase.from('descriptions').update({ status: 'blad', qa: { pass: false, errors: [e.message], warnings: [] } }).in('id', chunk.map(v => v.description_id))
+      throw e
+    }
+  }
+  return variants.length
 }

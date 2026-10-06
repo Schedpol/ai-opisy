@@ -254,3 +254,6 @@ a.tag { text-decoration: none; }
 .lib-item figcaption { padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; font-size: 14px; }
 .img-row select { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; }
 @media (max-width: 1080px) { .review-grid { grid-template-columns: 1fr; } .review-grid.head { display: none; } }
+.variants .summary { display: flex; gap: 8px; flex-wrap: wrap; }
+.kid-list { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.kid-list .tag { font-variant-numeric: tabular-nums; }

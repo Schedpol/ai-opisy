@@ -25,7 +25,7 @@ export default function Products() {
       supabase.from('products').select('id, sku, name, family_id, attributes, import_flags').order('sku'),
       supabase.from('channels').select('id, marketplace, language, active'),
       supabase.from('templates').select('id, channel_id, brand_id').eq('status', 'aktywny'),
-      supabase.from('descriptions').select('id, family_id, channel_id, product_id, version, status, is_base').eq('is_base', true).order('version', { ascending: false }),
+      supabase.from('descriptions').select('id, family_id, channel_id, product_id, version, status, is_base').order('version', { ascending: false }),
     ])
     const err = [b, r, f, p, ch, tp, ds].find(x => x.error)?.error
     if (err) { setError(plError(err.message)); return }
@@ -102,13 +102,16 @@ export default function Products() {
             <div className="gen-row">
               <span className="muted small">Opisy bazowe:</span>
               {data.channels.filter(ch => ch.active && data.templates.some(t => t.channel_id === ch.id && t.brand_id === f.brand_id)).map(ch => {
-                const last = data.descriptions.find(d => d.family_id === f.id && d.channel_id === ch.id)
+                const last = data.descriptions.find(d => d.is_base && d.family_id === f.id && d.channel_id === ch.id)
+                const seen = {}; const vars = data.descriptions.filter(d => !d.is_base && d.family_id === f.id && d.channel_id === ch.id && !seen[d.product_id] && (seen[d.product_id] = true))
+                const okVars = vars.filter(d => ['zaakceptowany', 'opublikowany'].includes(d.status)).length
                 const g = gen[`${f.id}|${ch.id}`] || {}
                 return (
                   <span key={ch.id} className="gen-item">
                     <strong>{ch.marketplace} {ch.language.toUpperCase()}</strong>
                     {last && <Link to={`/weryfikacja/${last.id}`} className={`tag st-${last.status}`}>v{last.version}</Link>}
                     <button className="link-dark" disabled={g.busy || !f.lead_product_id} onClick={() => generate(f, ch)}>{g.busy ? 'Uruchamianie…' : last ? 'Generuj ponownie' : 'Generuj'}</button>
+                    {last?.status === 'zaakceptowany' && <span className="muted small">warianty: {okVars}/{Math.max(items.length - 1, 0)}</span>}
                     {g.error && <span className="error small">{g.error}</span>}
                   </span>
                 )

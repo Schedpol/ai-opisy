@@ -35,3 +35,17 @@ export async function runJob(jobType, payload, { onStage, timeoutSec = 120 } = {
   }
   throw new Error('Zadanie trwa zbyt długo. Sprawdź listę wykonań (Executions) w n8n.')
 }
+
+// Zleca zadanie i wraca od razu po przyjęciu przez n8n (postęp śledzimy po statusach opisów)
+export async function startJob(jobType, payload) {
+  if (!N8N_URL) throw new Error('Brakuje adresu n8n (zmienna VITE_N8N_WEBHOOK_URL).')
+  const { data: { session } } = await supabase.auth.getSession()
+  const ins = await supabase.from('jobs').insert({ job_type: jobType, payload, created_by: session.user.id }).select('id').single()
+  if (ins.error) throw new Error(ins.error.message)
+  let res
+  try {
+    res = await fetch(N8N_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` }, body: JSON.stringify({ job_id: ins.data.id }) })
+  } catch { throw new Error('Brak połączenia z n8n. Sprawdź, czy workflow jest włączony.') }
+  if (!res.ok) { const b = await res.json().catch(() => ({})); throw new Error(b.error || `n8n odrzucił zadanie (kod ${res.status}).`) }
+  return ins.data.id
+}

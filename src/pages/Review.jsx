@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase, plError } from '../supabase.js'
-import { regenerateSections } from '../gen.js'
+import { regenerateSections, generateVariants } from '../gen.js'
 
 const STATUS = { generowanie: 'w trakcie', do_weryfikacji: 'do weryfikacji', poprawki: 'poprawiony', zaakceptowany: 'zaakceptowany', opublikowany: 'opublikowany', blad: 'błąd', do_generacji: 'do generacji' }
 const FILTERS = [['do_weryfikacji', 'Do weryfikacji'], ['zaakceptowany', 'Zaakceptowane'], ['blad', 'Błędy'], ['wszystkie', 'Wszystkie']]
@@ -9,8 +9,8 @@ const FILTERS = [['do_weryfikacji', 'Do weryfikacji'], ['zaakceptowany', 'Zaakce
 function useLookups() {
   const [l, setL] = useState(null)
   useEffect(() => { (async () => {
-    const [f, c] = await Promise.all([supabase.from('product_families').select('id, model_name'), supabase.from('channels').select('id, marketplace, language')])
-    setL({ fam: Object.fromEntries((f.data || []).map(x => [x.id, x.model_name])), ch: Object.fromEntries((c.data || []).map(x => [x.id, `${x.marketplace} ${x.language.toUpperCase()}`])) })
+    const [f, c, p] = await Promise.all([supabase.from('product_families').select('id, model_name'), supabase.from('channels').select('id, marketplace, language'), supabase.from('products').select('id, sku')])
+    setL({ fam: Object.fromEntries((f.data || []).map(x => [x.id, x.model_name])), ch: Object.fromEntries((c.data || []).map(x => [x.id, `${x.marketplace} ${x.language.toUpperCase()}`])), sku: Object.fromEntries((p.data || []).map(x => [x.id, x.sku])) })
   })() }, [])
   return l
 }
@@ -20,7 +20,7 @@ function ReviewList() {
   const [filter, setFilter] = useState('do_weryfikacji')
   const lk = useLookups()
   useEffect(() => { (async () => {
-    const { data } = await supabase.from('descriptions').select('id, family_id, channel_id, product_id, version, status, qa, created_at').order('version', { ascending: false })
+    const { data } = await supabase.from('descriptions').select('id, family_id, channel_id, product_id, version, status, qa, created_at, is_base').order('version', { ascending: false })
     const latest = {}
     for (const d of data || []) { const k = `${d.family_id}|${d.channel_id}|${d.product_id}`; if (!latest[k]) latest[k] = d }
     setRows(Object.values(latest).sort((a, b) => b.created_at.localeCompare(a.created_at)))
@@ -37,10 +37,10 @@ function ReviewList() {
       {shown.length === 0 ? <div className="panel empty"><p className="muted">Brak opisów. Opis bazowy generujesz na ekranie Produkty, przy rodzinie.</p></div> : (
         <div className="panel table-wrap">
           <table className="compact">
-            <thead><tr><th>Rodzina</th><th>Kanał</th><th>Wersja</th><th>Status</th><th>QA</th><th>Utworzono</th><th /></tr></thead>
+            <thead><tr><th>Rodzina</th><th>SKU</th><th>Kanał</th><th>Wersja</th><th>Status</th><th>QA</th><th>Utworzono</th><th /></tr></thead>
             <tbody>{shown.map(r => (
               <tr key={r.id}>
-                <td><strong>{lk.fam[r.family_id] || '—'}</strong></td><td>{lk.ch[r.channel_id]}</td><td>v{r.version}</td>
+                <td><strong>{lk.fam[r.family_id] || '—'}</strong>{r.is_base && <span className="tag">bazowy</span>}</td><td className="mono">{lk.sku[r.product_id]}</td><td>{lk.ch[r.channel_id]}</td><td>v{r.version}</td>
                 <td><span className={`tag st-${r.status}`}>{STATUS[r.status]}</span></td>
                 <td>{r.qa ? <>{r.qa.errors?.length ? <span className="tag err">{r.qa.errors.length} błędy</span> : <span className="tag okt">OK</span>} {r.qa.warnings?.length ? <span className="muted small">{r.qa.warnings.length} uwag</span> : null}</> : '—'}</td>
                 <td className="muted">{new Date(r.created_at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}</td>
@@ -92,6 +92,7 @@ function ReviewDetail({ id, profile }) {
   const [busy, setBusy] = useState('')
   const [err, setErr] = useState('')
   const [view, setView] = useState('sekcje')
+  const [kids, setKids] = useState([])
   const lk = useLookups()
   const timer = useRef(null)
   const canApprove = ['akceptujacy', 'admin'].includes(profile?.role)
@@ -103,8 +104,15 @@ function ReviewDetail({ id, profile }) {
     if (data.template_id) { const t = await supabase.from('templates').select('*').eq('id', data.template_id).single(); setTpl(t.data) }
     const v = await supabase.from('descriptions').select('id, version, status').eq('family_id', data.family_id).eq('channel_id', data.channel_id).eq('product_id', data.product_id).order('version', { ascending: false })
     setVersions(v.data || [])
+    let pending = data.status === 'generowanie'
+    if (data.is_base) {
+      const k = await supabase.from('descriptions').select('id, product_id, version, status, qa').eq('family_id', data.family_id).eq('channel_id', data.channel_id).eq('is_base', false).order('version', { ascending: false })
+      const latest = {}; for (const x of k.data || []) if (!latest[x.product_id]) latest[x.product_id] = x
+      const list = Object.values(latest); setKids(list)
+      pending = pending || list.some(x => x.status === 'generowanie')
+    }
     clearTimeout(timer.current)
-    if (data.status === 'generowanie') timer.current = setTimeout(load, 4000)
+    if (pending) timer.current = setTimeout(load, 5000)
   }
   useEffect(() => { setSel({}); setComments({}); setGeneral(''); setErr(''); load(); return () => clearTimeout(timer.current) }, [id])
 
@@ -114,6 +122,11 @@ function ReviewDetail({ id, profile }) {
     if (error) setErr(plError(error.message)); else load()
     setBusy('')
   }
+  async function variants() {
+    setBusy('variants'); setErr('')
+    try { const n = await generateVariants(d); if (!n) setErr('Wszystkie warianty mają już zaakceptowane opisy.'); await load() } catch (e) { setErr(e.message) } finally { setBusy('') }
+  }
+
   async function regenerate() {
     const sections = Object.keys(sel).filter(k => sel[k])
     setBusy('regen'); setErr('')
@@ -135,7 +148,7 @@ function ReviewDetail({ id, profile }) {
       <header className="page-head">
         <div>
           <h1>{lk.fam[d.family_id]} · {lk.ch[d.channel_id]}</h1>
-          <p className="muted">Opis {d.is_base ? 'bazowy rodziny' : 'wariantu'} · <span className={`tag st-${d.status}`}>{STATUS[d.status]}</span></p>
+          <p className="muted">{d.is_base ? 'Opis bazowy rodziny' : 'Opis wariantu'} · SKU {lk.sku[d.product_id]} · <span className={`tag st-${d.status}`}>{STATUS[d.status]}</span>{d.meta?.mode === 'variant' && d.status === 'zaakceptowany' && <span className="muted small"> (akceptacja odziedziczona z opisu bazowego)</span>}</p>
         </div>
         <label className="lead">Wersja
           <select value={d.id} onChange={e => nav(`/weryfikacja/${e.target.value}`)}>
@@ -166,6 +179,25 @@ function ReviewDetail({ id, profile }) {
             </div>
           </div>
           {err && <p className="error" role="alert">{err}</p>}
+
+          {d.is_base && d.status === 'zaakceptowany' && (
+            <div className="panel variants">
+              <div className="panel-head">
+                <h2>Warianty rodziny</h2>
+                <button className="btn top" onClick={variants} disabled={!!busy}>{busy === 'variants' ? 'Uruchamianie…' : kids.length ? 'Generuj brakujące warianty' : 'Generuj opisy wariantów'}</button>
+              </div>
+              {kids.length === 0 ? <p className="muted">Opisy pozostałych SKU powstaną z tego opisu: AI zmieni tylko tytuł, nagłówek i fragmenty o wymiarze, kształcie, kolorze i odpływie. Warianty bez błędów QA dziedziczą akceptację.</p> : (
+                <>
+                  <p className="summary">
+                    {['zaakceptowany', 'do_weryfikacji', 'generowanie', 'blad'].map(st => { const n = kids.filter(x => x.status === st).length; return n ? <span key={st} className={`tag st-${st}`}>{n} {STATUS[st]}</span> : null })}
+                  </p>
+                  <div className="kid-list">
+                    {kids.filter(x => x.status !== 'zaakceptowany').map(x => <Link key={x.id} to={`/weryfikacja/${x.id}`} className={`tag st-${x.status}`}>{lk.sku[x.product_id]}</Link>)}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {view === 'podglad' ? <div className="preview-frame" dangerouslySetInnerHTML={{ __html: d.html || '' }} /> : (
             <>
