@@ -17,7 +17,7 @@ export default function Products() {
     const [b, r, f, p] = await Promise.all([
       supabase.from('brands').select('id, name'),
       supabase.from('import_rules').select('*'),
-      supabase.from('product_families').select('id, brand_id, model_name, series, category, lead_product_id').order('model_name'),
+      supabase.from('product_families').select('id, brand_id, model_name, series, category, lead_product_id, technologies').order('model_name'),
       supabase.from('products').select('id, sku, name, family_id, attributes, import_flags').order('sku'),
     ])
     const err = [b, r, f, p].find(x => x.error)?.error
@@ -25,6 +25,12 @@ export default function Products() {
     setData({ brands: b.data, rules: r.data, families: f.data, products: p.data })
   }
   useEffect(() => { load() }, [])
+
+  async function setTech(familyId, text) {
+    const technologies = [...new Set(text.split(',').map(t => t.replace(/®/g, '').trim()).filter(Boolean))]
+    const { error } = await supabase.from('product_families').update({ technologies }).eq('id', familyId)
+    if (error) setError(plError(error.message)); else load()
+  }
 
   async function setLead(familyId, productId) {
     const { error } = await supabase.from('product_families').update({ lead_product_id: productId || null }).eq('id', familyId)
@@ -76,6 +82,9 @@ export default function Products() {
               </label>
             </div>
             {!f.lead_product_id && <p className="hint">Wybierz wariant wiodący – dla niego powstanie opis bazowy rodziny.</p>}
+            <label className="tech">Technologie w tej rodzinie <span className="muted">(oddziel przecinkami – fakty o tych technologiach trafią do opisów)</span>
+              <input defaultValue={(f.technologies || []).join(', ')} placeholder="np. Stabildense" onBlur={e => e.target.value !== (f.technologies || []).join(', ') && setTech(f.id, e.target.value)} />
+            </label>
             <details>
               <summary>Warianty ({items.length})</summary>
               <div className="table-wrap">

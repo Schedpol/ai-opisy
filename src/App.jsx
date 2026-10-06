@@ -9,6 +9,7 @@ import Users from './pages/Users.jsx'
 import Soon from './pages/Soon.jsx'
 import Products from './pages/Products.jsx'
 import Rules from './pages/Rules.jsx'
+import Knowledge from './pages/Knowledge.jsx'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -48,7 +49,7 @@ export default function App() {
           <Route index element={<Dashboard profile={profile} />} />
           <Route path="produkty" element={<Products />} />
           <Route path="slownik" element={<Rules profile={profile} />} />
-          <Route path="wiedza" element={soon('Księga wiedzy', 'Etap 2: wgrywanie DOCX i akceptacja faktów.')} />
+          <Route path="wiedza" element={<Knowledge profile={profile} />} />
           <Route path="szablony" element={soon('Szablony', 'Etap 3: wizualny edytor szablonów.')} />
           <Route path="frazy" element={soon('Frazy kluczowe', 'Etap 3: bank fraz RO, HU i BG.')} />
           <Route path="weryfikacja" element={soon('Weryfikacja', 'Etap 3: oryginał i tłumaczenie PL obok siebie.')} />

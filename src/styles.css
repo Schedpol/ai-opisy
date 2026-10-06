@@ -161,3 +161,32 @@ table.compact td.flags { white-space: normal; }
 .family-head > div:first-child { flex: 1; min-width: 0; }
 .lead { flex: 0 0 340px; min-width: 0; }
 .lead select { max-width: 100%; }
+
+/* Księga wiedzy */
+.tab .count { display: inline-block; margin-left: 6px; font-size: 12px; padding: 0 7px; border-radius: 999px; background: var(--stone); color: var(--ink-soft); }
+.fact { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 22px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-m); padding: 18px 20px; margin-bottom: 12px; }
+.fact textarea, .add-fact textarea { display: block; width: 100%; font: inherit; font-size: 15px; color: var(--ink); border: 1px solid transparent; border-radius: var(--radius-s); padding: 6px 8px; margin: -6px -8px 6px; resize: vertical; background: transparent; }
+.add-fact textarea { border-color: var(--line); margin: 6px 0 0; background: var(--surface); }
+.fact textarea:hover { border-color: var(--line); }
+.fact textarea:focus { border-color: var(--action); outline: none; background: var(--surface); }
+.fact-meta { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; font-size: 13.5px; margin: 4px 0 8px; }
+.tag { background: var(--stone); color: var(--ink); }
+.hint-inline { color: var(--warn); }
+.notes { list-style: none; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12.5px; }
+.notes li.tag { padding: 2px 8px; }
+.fact-side label { margin-top: 0; font-size: 13.5px; }
+.req { color: var(--warn); font-weight: 400; }
+.fact-actions { display: flex; gap: 8px; }
+.fact-actions .btn, .fact-side .btn { margin-top: 12px; }
+.btn.ghost { background: var(--surface); color: var(--action); border: 1px solid var(--line); }
+.btn.ghost:hover:not(:disabled) { background: var(--stone); }
+.btn.ghost.danger { color: var(--error); }
+.fact-side .link-dark { margin-top: 12px; }
+.add-fact summary { font-weight: 600; }
+.extract-result { margin-top: 14px; }
+.rejected { margin: 8px 0 0; padding-left: 18px; font-size: 14px; }
+.rejected li { margin-bottom: 4px; }
+label.tech { font-size: 14px; margin-top: 12px; }
+label.tech input { max-width: 520px; }
+@media (max-width: 860px) { .fact { grid-template-columns: 1fr; } }
+.row-form select { display: block; width: 100%; margin-top: 6px; padding: 10px 12px; }
