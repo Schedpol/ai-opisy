@@ -87,3 +87,11 @@ export function rowsFromBaselinkerCsv(rows) {
     images: [r.zdjecie, ...Array.from({ length: 15 }, (_, i) => r[`zdjecie_dodatkowe_${i + 1}`])].filter(Boolean),
   }))
 }
+
+// Marka i model z nazwy (do drzewa asortymentu); dla nazw spoza wzorca: marka = pierwsze słowo
+export function parseModel(name) {
+  const n = clean(name)
+  const m = n.match(NAME_RX)
+  if (m) return { brand: m[1], model: m[3] }
+  return { brand: n.split(' ')[0] || null, model: null }
+}

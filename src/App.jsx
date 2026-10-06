@@ -17,6 +17,7 @@ import Library from './pages/Library.jsx'
 import Publish from './pages/Publish.jsx'
 import Settings from './pages/Settings.jsx'
 import QaRules from './pages/QaRules.jsx'
+import Tree from './pages/Tree.jsx'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -54,6 +55,7 @@ export default function App() {
       <Routes>
         <Route element={<Layout profile={profile} />}>
           <Route index element={<Dashboard profile={profile} />} />
+          <Route path="drzewo" element={<Tree />} />
           <Route path="produkty" element={<Products />} />
           <Route path="slownik" element={<Rules profile={profile} />} />
           <Route path="wiedza" element={<Knowledge profile={profile} />} />

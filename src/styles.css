@@ -286,3 +286,29 @@ table.rules td.rule-text textarea { width: 100%; font: inherit; font-size: 13.5p
 .tag.t-instrukcja { background: #E3EBF7; color: var(--action); }
 .tag.t-zakazany_wzorzec, .tag.t-marka_konkurencji { background: #F8E1DF; color: var(--error); }
 .panel label > textarea { display: block; width: 100%; margin-top: 6px; font: inherit; color: var(--ink); border: 1px solid var(--line); border-radius: var(--radius-s); padding: 8px 10px; }
+
+/* Drzewo produktów */
+.upload-panel summary { display: flex; gap: 12px; align-items: baseline; }
+.tree-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.panel.stat { display: flex; flex-direction: column; gap: 2px; padding: 16px 18px; margin: 0; }
+.panel.stat .big { font-size: 26px; }
+.tree-tools { display: flex; flex-wrap: wrap; gap: 12px 18px; align-items: center; margin-bottom: 6px; }
+.tree-search { width: 260px; margin: 0; padding: 8px 10px; }
+.tree { padding: 10px 14px; }
+.tree-node { border-top: 1px solid var(--stone); }
+.tree > .tree-node:first-child { border-top: 0; }
+.tree-children { padding-left: 22px; }
+.tree-head { display: grid; grid-template-columns: 18px minmax(0, 1fr) 90px 160px; gap: 10px; align-items: center; width: 100%; font: inherit; text-align: left; background: none; border: 0; padding: 9px 4px; cursor: pointer; color: var(--ink); }
+.tree-head:hover { background: var(--stone); border-radius: var(--radius-s); }
+.lvl-0 > .tree-head .tree-label { font-weight: 700; font-size: 16px; }
+.lvl-1 > .tree-head .tree-label { font-weight: 600; }
+.caret { color: var(--ink-soft); }
+.tree-count { text-align: right; font-variant-numeric: tabular-nums; font-size: 13.5px; color: var(--ink-soft); }
+.tree-bar { display: block; height: 8px; border-radius: 4px; background: var(--stone); overflow: hidden; }
+.tree-bar > span { display: block; height: 100%; background: var(--ok); }
+.tree-skus { margin: 2px 0 10px 28px; width: calc(100% - 28px); }
+.tree-skus td.tree-name { white-space: normal; color: var(--ink-soft); min-width: 260px; }
+.tree-skus td.sel .tag { outline: 2px solid currentColor; outline-offset: -2px; }
+.tree-skus td:not(.sel) .tag { opacity: .7; }
+.tag.st-none { background: var(--stone); color: var(--ink-soft); }
+.tag.st-out { background: transparent; color: var(--ink-soft); border: 1px dashed var(--line); }
