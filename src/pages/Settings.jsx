@@ -22,8 +22,12 @@ export default function Settings() {
     catch (e) { setMsg({ type: 'error', text: e.message }) } finally { setBusy('') }
   }
   async function save(c) {
-    setBusy(c.id); setMsg(null)
     const e = edit[c.id]
+    if (e.src.trim() && !/^[a-z]+_\d+$/.test(e.src.trim())) {
+      setMsg({ type: 'error', text: `ID integracji ma format kod_konto, np. emagro_42894 – samo „${e.src.trim()}” nie wystarczy. Kliknij „Pobierz integracje z Baselinkera” i wybierz z listy.` }); return
+    }
+    if (e.lang.trim() && !/^[a-z]{2}$/.test(e.lang.trim())) { setMsg({ type: 'error', text: 'Język klucza to dwie małe litery, np. ro albo bg.' }); return }
+    setBusy(c.id); setMsg(null)
     const { error } = await supabase.from('channels').update({ baselinker_source_id: e.src.trim() || null, active: e.active, limits: { ...(c.limits || {}), title_max: Number(e.title_max) || 200 },
       bl_text_lang: e.lang.trim() || null, bl_desc_field: e.desc.trim() || 'description', bl_name_field: e.name.trim() || 'name' }).eq('id', c.id)
     setMsg(error ? { type: 'error', text: plError(error.message) } : { type: 'ok', text: `Zapisano ${c.marketplace} ${c.language.toUpperCase()}.` })

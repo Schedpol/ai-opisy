@@ -36,7 +36,8 @@ export async function runJob(jobType, payload, { onStage, timeoutSec = 120, url 
     if (data?.status === 'gotowe') return data.result
     if (data?.status === 'blad') throw new Error(data.error || 'n8n zgłosił błąd zadania.')
   }
-  throw new Error('Zadanie trwa zbyt długo. Sprawdź listę wykonań (Executions) w n8n.')
+  await supabase.from('jobs').update({ status: 'blad', error: 'Przekroczony czas oczekiwania w aplikacji' }).eq('id', jobId).in('status', ['w_kolejce', 'w_toku'])
+  throw new Error('n8n nie zakończył zadania w oczekiwanym czasie – prawdopodobnie zatrzymał się na błędzie. Otwórz Executions w n8n i sprawdź czerwony node.')
 }
 
 // Zleca zadanie i wraca od razu po przyjęciu przez n8n (postęp śledzimy po statusach opisów)
