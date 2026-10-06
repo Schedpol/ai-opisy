@@ -11,7 +11,8 @@ export default function Settings() {
 
   async function load() {
     const { data } = await supabase.from('channels').select('*').order('code')
-    setChannels(data || []); setEdit(Object.fromEntries((data || []).map(c => [c.id, { src: c.baselinker_source_id || '', active: c.active, title_max: c.limits?.title_max ?? 200 }])))
+    setChannels(data || []); setEdit(Object.fromEntries((data || []).map(c => [c.id, { src: c.baselinker_source_id || '', active: c.active, title_max: c.limits?.title_max ?? 200,
+      lang: c.bl_text_lang || '', desc: c.bl_desc_field || 'description', name: c.bl_name_field || 'name' }])))
   }
   useEffect(() => { load() }, [])
 
@@ -23,7 +24,8 @@ export default function Settings() {
   async function save(c) {
     setBusy(c.id); setMsg(null)
     const e = edit[c.id]
-    const { error } = await supabase.from('channels').update({ baselinker_source_id: e.src.trim() || null, active: e.active, limits: { ...(c.limits || {}), title_max: Number(e.title_max) || 200 } }).eq('id', c.id)
+    const { error } = await supabase.from('channels').update({ baselinker_source_id: e.src.trim() || null, active: e.active, limits: { ...(c.limits || {}), title_max: Number(e.title_max) || 200 },
+      bl_text_lang: e.lang.trim() || null, bl_desc_field: e.desc.trim() || 'description', bl_name_field: e.name.trim() || 'name' }).eq('id', c.id)
     setMsg(error ? { type: 'error', text: plError(error.message) } : { type: 'ok', text: `Zapisano ${c.marketplace} ${c.language.toUpperCase()}.` })
     setBusy(''); if (!error) load()
   }
@@ -47,15 +49,21 @@ export default function Settings() {
         )}
         <div className="table-wrap">
           <table className="compact">
-            <thead><tr><th>Kanał</th><th>ID integracji Baselinker</th><th>Limit tytułu</th><th>Aktywny</th><th /></tr></thead>
+            <thead><tr><th>Kanał</th><th>ID integracji</th><th>Język klucza</th><th>Pole opisu</th><th>Pole tytułu</th><th>Limit tytułu</th><th>Aktywny</th><th /></tr></thead>
             <tbody>
               {channels.map(c => {
                 const e = edit[c.id] || {}
                 const dirty = e.src !== (c.baselinker_source_id || '') || e.active !== c.active || Number(e.title_max) !== (c.limits?.title_max ?? 200)
+                  || e.lang !== (c.bl_text_lang || '') || e.desc !== (c.bl_desc_field || 'description') || e.name !== (c.bl_name_field || 'name')
+                const key = `${e.desc || 'description'}|${e.lang || c.language}|${e.src || '…'}`
                 return (
                   <tr key={c.id}>
                     <td><strong>{c.marketplace} {c.language.toUpperCase()}</strong></td>
-                    <td><input value={e.src || ''} placeholder="np. emag_12345" list="integ-list" onChange={ev => setEdit({ ...edit, [c.id]: { ...e, src: ev.target.value } })} /></td>
+                    <td><input value={e.src || ''} placeholder="np. emagro_42894" list="integ-list" onChange={ev => setEdit({ ...edit, [c.id]: { ...e, src: ev.target.value } })} />
+                      <span className="muted small key-preview">{key}</span></td>
+                    <td><input value={e.lang || ''} placeholder={c.language} onChange={ev => setEdit({ ...edit, [c.id]: { ...e, lang: ev.target.value } })} style={{ width: 70 }} /></td>
+                    <td><input value={e.desc || ''} list="desc-fields" onChange={ev => setEdit({ ...edit, [c.id]: { ...e, desc: ev.target.value } })} /></td>
+                    <td><input value={e.name || ''} list="name-fields" onChange={ev => setEdit({ ...edit, [c.id]: { ...e, name: ev.target.value } })} style={{ width: 90 }} /></td>
                     <td><input type="number" min="50" max="255" value={e.title_max ?? 200} onChange={ev => setEdit({ ...edit, [c.id]: { ...e, title_max: ev.target.value } })} style={{ width: 90 }} /></td>
                     <td><input type="checkbox" checked={!!e.active} onChange={ev => setEdit({ ...edit, [c.id]: { ...e, active: ev.target.checked } })} /></td>
                     <td><button className="btn ghost small-btn" disabled={!dirty || busy === c.id} onClick={() => save(c)}>Zapisz</button></td>
@@ -65,6 +73,9 @@ export default function Settings() {
             </tbody>
           </table>
         </div>
+        <datalist id="desc-fields"><option value="description">Opis</option><option value="extra_field_25423">OPIS eMAG</option><option value="description_extra1">Opis dodatkowy 1</option></datalist>
+        <datalist id="name-fields"><option value="name">Nazwa produktu</option></datalist>
+        <p className="muted small">Klucz pod tabelą ID to dokładne pole, do którego trafi opis. Musi istnieć na liście pól tekstowych katalogu w Baselinkerze. Pole opisu ustaw takie, jakie integracja wysyła na marketplace (np. „OPIS eMAG”). Język klucza: zostaw puste, chyba że Baselinker oczekuje innego (eMAG HU: bg).</p>
         <datalist id="integ-list">{(integ || []).map(i => <option key={i.source_id} value={i.source_id}>{i.name}</option>)}</datalist>
         {msg && <p className={msg.type} role="status">{msg.text}</p>}
       </div>

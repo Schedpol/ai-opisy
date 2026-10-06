@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom'
 import { supabase } from '../supabase.js'
 import { runJob, PUBLISH_URL } from '../jobs.js'
 
+const opisy = n => `${n} ${n === 1 ? 'opis' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'opisy' : 'opisów'}`
+
 const VIEWS = [['gotowe', 'Gotowe do publikacji'], ['opublikowane', 'Opublikowane'], ['bledy', 'Błędy publikacji']]
 
 export default function Publish({ profile }) {
@@ -44,7 +46,7 @@ export default function Publish({ profile }) {
 
   async function publish() {
     const ids = [...sel].filter(id => shown.some(r => r.id === id))
-    if (!ids.length || !confirm(`Wysłać ${ids.length} opisów do Baselinkera (${ch.marketplace} ${ch.language.toUpperCase()})? Nadpisze to obecne teksty tych produktów w tej integracji.`)) return
+    if (!ids.length || !confirm(`Wysłać ${opisy(ids.length)} do Baselinkera (${ch.marketplace} ${ch.language.toUpperCase()})? Nadpisze to obecne teksty tych produktów w tej integracji.`)) return
     setBusy(true); setErr(''); setRes(null)
     try {
       const out = { published: 0, failed: [], skipped: [], dry_run: false, would_publish: 0 }
@@ -78,8 +80,8 @@ export default function Publish({ profile }) {
       {res && (
         <div className="panel">
           {res.dry_run ? (
-            <p className="hint"><strong>Tryb próbny:</strong> {res.would_publish} opisów jest gotowych do wysłania, do pól {res.example?.fields?.join(' i ')}. Nic nie zostało zapisane w Baselinkerze. Aby publikować naprawdę, ustaw DRY_RUN = false w workflow „AI Opisy – publikacja”.</p>
-          ) : <p className="ok">Opublikowano {res.published} opisów.</p>}
+            <p className="hint"><strong>Tryb próbny:</strong> {opisy(res.would_publish)} gotowe do wysłania, do pól {res.example?.fields?.join(' i ')}. Nic nie zostało zapisane w Baselinkerze. Aby publikować naprawdę, ustaw DRY_RUN = false w workflow „AI Opisy – publikacja”.</p>
+          ) : <p className="ok">Opublikowano {opisy(res.published)}.</p>}
           {res.failed.length > 0 && <><p className="error">Błędy Baselinkera ({res.failed.length}):</p><ul className="qa-err">{res.failed.map((f, i) => <li key={i}>{f.sku}: {f.error}</li>)}</ul></>}
           {res.skipped.length > 0 && <details><summary>Pominięte ({res.skipped.length})</summary><ul className="qa-warn">{res.skipped.map((s, i) => <li key={i}>{s.sku || s.description_id}: {s.reason}</li>)}</ul></details>}
         </div>
