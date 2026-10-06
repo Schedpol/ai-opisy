@@ -2,35 +2,66 @@
 // Jeśli układ eksportu się zmieni, popraw indeksy w PIM_COLUMNS (liczone od zera).
 export const PIM_COLUMNS = { sku: 0, type: 1, locale: 2, path: 10, ean: 17, shape: 20, brand: 21, model: 22, name: 23, color: 31, series_label: 32, dims_label: 36, technology: 44, weight: 46 }
 
-// --- kodowanie: UTF-8, Windows-1250, albo „podwójne” UTF-8 (otwarte w programie jako ISO-8859-2) ---
-const MOJIBAKE = /[ĹÄĂÂ][\u0080-\u00BF\u0100-\u017F\u02C0-\u02DD\u2010-\u203A]|Ä[…™‡]|Ĺ[‚„›şź]/
-let latin2Map = null
-function latin2ToBytes(text) {
-  if (!latin2Map) {
-    latin2Map = new Map()
-    const dec = new TextDecoder('iso-8859-2')
-    for (let b = 0; b < 256; b++) latin2Map.set(dec.decode(new Uint8Array([b])), b)
-    const dec2 = new TextDecoder('windows-1250')
-    for (let b = 128; b < 256; b++) { const ch = dec2.decode(new Uint8Array([b])); if (!latin2Map.has(ch)) latin2Map.set(ch, b) }
-  }
-  const out = []
-  for (const ch of text) {
-    const b = latin2Map.get(ch)
-    if (b === undefined) { for (const x of new TextEncoder().encode(ch)) out.push(x) } else out.push(b)
-  }
-  return new Uint8Array(out)
+// --- kodowanie: UTF-8, Windows-1250, albo „podwójne” UTF-8 (tekst otwarty jako ISO-8859-2) ---
+// Wariant stratny: znaki sterujące 0x80–0x9F zginęły po drodze → litery odtwarzamy z kontekstu.
+let L2 = null
+function latin2() {
+  if (L2) return L2
+  const dec = new TextDecoder('iso-8859-2'), toByte = new Map(), cont = new Set()
+  for (let b = 0; b < 256; b++) { const ch = dec.decode(new Uint8Array([b])); toByte.set(ch, b); if (b >= 0x80 && b <= 0xBF) cont.add(ch) }
+  return (L2 = { toByte, cont })
 }
-export function fixMojibake(text) {
-  if (!MOJIBAKE.test(text)) return { text, fixed: false, lossy: false }
-  const repaired = new TextDecoder('utf-8').decode(latin2ToBytes(text))
-  const bad = (repaired.match(/\uFFFD/g) || []).length
-  if (bad > repaired.length / 200) return { text, fixed: false, lossy: true }
-  return { text: repaired.replace(/\uFFFD/g, ''), fixed: true, lossy: bad > 0 }
+const LEADS = new Set(['Ă', 'Ä', 'Ĺ', 'Â'])
+const HINT = /[ĂÄĹÂ]/
+// rdzenie typowe dla asortymentu: „Ä”/„Ĺ” bez drugiego bajtu → właściwa litera
+const STEMS = [['kÄtn', 'kątn'], ['krÄg', 'krąg'], ['piÄc', 'pięc'], ['miÄdzy', 'między'], ['ciÄci', 'cięci'], ['ciÄg', 'ciąg'], ['niÄt', 'nięt'], ['wÄsk', 'wąsk'],
+  ['ujÄc', 'ując'], ['wiÄk', 'więk'], ['rÄcz', 'ręcz'], ['siÄ', 'się'], ['bÄd', 'będ'], ['pÄk', 'pęk'], ['dĹug', 'dług'], ['noĹnik', 'nośnik'], ['oĹci', 'ości'],
+  ['Ĺcian', 'ścian'], ['Ĺciek', 'ściek'], ['Ĺwi', 'świ'], ['koĹc', 'końc'], ['ĹrodkĂł', 'środkó'], ['Ĺrod', 'środ'], ['moĹc', 'mość'], ['naroĹn', 'narożn']]
+const isUpperCtx = (str, i) => { const near = (str.slice(Math.max(0, i - 3), i) + str.slice(i + 1, i + 4)).replace(/[^\p{L}]/gu, ''); return near.length > 0 && near === near.toUpperCase() }
+function repairCell(str) {
+  if (!HINT.test(str)) return { text: str, mode: 0 }
+  const { toByte, cont } = latin2()
+  // 1) próba bezstratna
+  const bytes = []; for (const ch of str) { const b = toByte.get(ch); if (b === undefined) bytes.push(...new TextEncoder().encode(ch)); else bytes.push(b) }
+  const exact = new TextDecoder('utf-8').decode(new Uint8Array(bytes))
+  if (!exact.includes('\uFFFD')) return { text: exact, mode: exact !== str ? 1 : 0 }
+  // 2) wariant stratny: pary „wiodący + kontynuacja” dekodujemy, samotne wiodące odtwarzamy z kontekstu
+  let t = str
+  // rdzenie mają tę samą długość co błędny zapis → wielkość liter przenosimy znak po znaku
+  for (const [bad, good] of STEMS) t = t.replace(new RegExp(bad, 'gi'), m => {
+    const allUp = /[A-Z]/.test(m) && m.replace(/[ĂÄĹ]/g, '') === m.replace(/[ĂÄĹ]/g, '').toUpperCase()
+    return [...good].map((g, i) => (allUp || (m[i] && m[i] !== m[i].toLowerCase() && !'ĂÄĹ'.includes(m[i]))) ? g.toUpperCase() : g).join('')
+  })
+  let out = ''
+  const chars = [...t]
+  for (let i = 0; i < chars.length; i++) {
+    const ch = chars[i], nx = chars[i + 1]
+    if (LEADS.has(ch) && nx && cont.has(nx)) { out += new TextDecoder('utf-8').decode(new Uint8Array([toByte.get(ch), toByte.get(nx)])); i++; continue }
+    if (ch === 'Ä' || ch === 'Ĺ' || ch === 'Ă') {
+      const up = isUpperCtx(chars.join(''), i)
+      const endOfWord = !nx || !/\p{L}/u.test(nx)
+      const pick = ch === 'Ä' ? 'ą' : ch === 'Ă' ? 'ó' : (endOfWord ? 'ł' : 'ł')
+      out += up ? pick.toUpperCase() : pick
+      continue
+    }
+    if (ch === 'Â' && nx === '®') continue
+    out += ch
+  }
+  return { text: out.replace(/\uFFFD/g, ''), mode: 2 }
 }
+export function repairTable(table) {
+  let exact = 0, approx = 0
+  const fixed = table.map(row => row.map(cell => {
+    if (typeof cell !== 'string') return cell
+    const r = repairCell(cell); if (r.mode === 1) exact++; if (r.mode === 2) approx++
+    return r.text
+  }))
+  return { table: fixed, exact, approx }
+}
+export function fixMojibake(text) { const r = repairCell(text); return { text: r.text, fixed: r.mode > 0, lossy: r.mode === 2 } }
 export function decodeBytes(buf) {
-  let text
-  try { text = new TextDecoder('utf-8', { fatal: true }).decode(buf) } catch { text = new TextDecoder('windows-1250').decode(buf) }
-  return fixMojibake(text.replace(/^\uFEFF/, ''))
+  try { return { text: new TextDecoder('utf-8', { fatal: true }).decode(buf).replace(/^\uFEFF/, ''), cp1250: false } }
+  catch { return { text: new TextDecoder('windows-1250').decode(buf), cp1250: true } }
 }
 
 const SHAPES = { kwadratowy: 'kwadratowy', prostokatny: 'prostokątny', polokragly: 'półokrągły', pieciokatny: 'pięciokątny', asymetryczny: 'asymetryczny' }

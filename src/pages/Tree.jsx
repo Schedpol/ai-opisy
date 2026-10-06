@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom'
 import Papa from 'papaparse'
 import { supabase, plError } from '../supabase.js'
 import { parseModel } from '../parser.js'
-import { decodeBytes, isPim, rowsFromPim, RULES } from '../pim.js'
+import { decodeBytes, repairTable, isPim, rowsFromPim, RULES } from '../pim.js'
 
 const ST = {
   opublikowany: { label: 'opublikowany', cls: 'st-opublikowany' },
@@ -44,11 +44,12 @@ function Upload({ last, onDone }) {
         const wb = XLSX.read(buf, { type: 'array' })
         table = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' })
       } else {
-        const dec = decodeBytes(buf)
-        if (dec.fixed) note = ' Naprawiono uszkodzone polskie znaki w pliku.'
-        if (dec.lossy) note = ' Uwaga: część polskich znaków w pliku jest nie do odzyskania – wyeksportuj plik ponownie w UTF-8.'
-        table = Papa.parse(dec.text, { header: false, skipEmptyLines: true, delimitersToGuess: ['\t', ';', ','] }).data
+        table = Papa.parse(decodeBytes(buf).text, { header: false, skipEmptyLines: true, delimitersToGuess: ['\t', ';', ','] }).data
       }
+      // naprawa polskich znaków komórka po komórce (także XLSX)
+      const rep = repairTable(table)
+      table = rep.table
+      if (rep.exact || rep.approx) note = ` Naprawiono polskie znaki w ${rep.exact + rep.approx} komórkach${rep.approx ? ` (w ${rep.approx} – odtworzone z kontekstu, bo w pliku brakowało części bajtów; sprawdź kilka nazw, a przy okazji wyeksportuj z PIM plik w UTF-8)` : ''}.`
       let rows, kind
       if (isPim(table)) {
         const res = rowsFromPim(table)
@@ -76,13 +77,17 @@ function Upload({ last, onDone }) {
     } catch (err) { setMsg({ type: 'error', text: plError(err.message) }) } finally { setBusy('') }
   }
   return (
-    <details className="panel upload-panel" open={isOpen} onToggle={e => setIsOpen(e.currentTarget.open)}>
-      <summary><strong>Lista asortymentu</strong> <span className="muted small">{last ? `wgrana ${new Date(last.at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })} · ${last.count} SKU${last.pim ? ' · z PIM' : ''}` : 'jeszcze nie wgrana'}</span></summary>
-      <p className="muted small">Wgraj eksport z PIM (CSV, TSV albo XLSX) – struktura drzewa powstanie ze ścieżki kategorii PIM. Działa też CSV z Baselinkera. Lista służy tylko do podglądu pokrycia i nie tworzy produktów do generowania opisów. Nowy plik zastępuje poprzednią listę.</p>
-      <label>Plik z asortymentem<input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" onChange={pick} disabled={!!busy} /></label>
+    <div className="panel upload-panel">
+      <div className="upload-head">
+        <div><strong>Lista asortymentu</strong> <span className="muted small">{last ? `wgrana ${new Date(last.at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })} · ${last.count} SKU${last.pim ? ' · z PIM' : ''}` : 'jeszcze nie wgrana'}</span></div>
+        <label className="btn upload">{busy ? 'Wgrywanie…' : last ? 'Wgraj nową listę' : 'Wgraj listę'}<input type="file" accept=".csv,.tsv,.txt,.xlsx,.xls" onChange={pick} disabled={!!busy} hidden /></label>
+      </div>
+      <details open={isOpen} onToggle={e => setIsOpen(e.currentTarget.open)}><summary className="muted small">Jaki plik wgrać?</summary>
+        <p className="muted small">Eksport z PIM (CSV, TSV albo XLSX) – struktura drzewa powstanie ze ścieżki kategorii PIM. Działa też CSV z Baselinkera. Lista służy tylko do podglądu pokrycia i nie tworzy produktów do generowania opisów. Nowy plik zastępuje poprzednią listę.</p>
+      </details>
       {busy && <p className="muted" role="status">{busy}</p>}
       {msg && <p className={msg.type} role="status">{msg.text}</p>}
-    </details>
+    </div>
   )
 }
 
@@ -186,7 +191,8 @@ export default function Tree() {
     return { root, total, inApp, perCh, count, outside: outside.length }
   }, [d, q, onlyMissing, onlyIssues, rule, channel])
 
-  if (err) return <section className="page"><h1>Drzewo produktów</h1><p className="error">{err}</p></section>
+  if (err) return <section className="page"><h1>Drzewo produktów</h1><p className="error">{err}</p>
+    {/column|kolumn/i.test(err) && <p className="hint">Wygląda na to, że baza nie ma nowych kolumn. Uruchom w Supabase migracje 10_asortyment_pim.sql i 11_jakosc_pim.sql, potem odśwież stronę.</p>}</section>
   if (!d) return <section className="page"><p className="muted">Ładowanie…</p></section>
   const toggle = k => { const n = new Set(open); n.has(k) ? n.delete(k) : n.add(k); setOpen(n) }
   const last = d.as.length ? { at: d.as.reduce((m, r) => r.uploaded_at > m ? r.uploaded_at : m, d.as[0].uploaded_at), count: d.as.length, pim: d.as.some(r => r.source === 'pim') } : null
