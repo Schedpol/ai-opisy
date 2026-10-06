@@ -3,8 +3,11 @@ import { supabase, N8N_URL } from './supabase.js'
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
 // Zleca zadanie n8n i czeka na wynik zapisany w bazie
-export async function runJob(jobType, payload, { onStage, timeoutSec = 120 } = {}) {
-  if (!N8N_URL) throw new Error('Brakuje adresu n8n (zmienna VITE_N8N_WEBHOOK_URL).')
+// Moduł publikacji działa jako osobny workflow – adres wyliczany z adresu głównego
+export const PUBLISH_URL = N8N_URL.replace('ai-opisy-zadania', 'ai-opisy-publikacja')
+
+export async function runJob(jobType, payload, { onStage, timeoutSec = 120, url = N8N_URL } = {}) {
+  if (!url) throw new Error('Brakuje adresu n8n (zmienna VITE_N8N_WEBHOOK_URL).')
   const { data: { session } } = await supabase.auth.getSession()
   const ins = await supabase.from('jobs').insert({ job_type: jobType, payload, created_by: session.user.id }).select('id').single()
   if (ins.error) throw new Error(ins.error.message)
@@ -12,14 +15,14 @@ export async function runJob(jobType, payload, { onStage, timeoutSec = 120 } = {
   onStage?.('wyslane')
   let res
   try {
-    res = await fetch(N8N_URL, {
+    res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
       body: JSON.stringify({ job_id: jobId }),
     })
   } catch {
     await supabase.from('jobs').update({ status: 'blad', error: 'Brak połączenia z n8n' }).eq('id', jobId).eq('status', 'w_kolejce')
-    throw new Error('Brak połączenia z n8n. Sprawdź, czy workflow jest włączony.')
+    throw new Error(url === N8N_URL ? 'Brak połączenia z n8n. Sprawdź, czy workflow jest włączony.' : 'Brak połączenia z workflow publikacji. Sprawdź, czy „AI Opisy – publikacja” jest włączony.')
   }
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {

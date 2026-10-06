@@ -14,6 +14,8 @@ import Templates from './pages/Templates.jsx'
 import Keywords from './pages/Keywords.jsx'
 import Review from './pages/Review.jsx'
 import Library from './pages/Library.jsx'
+import Publish from './pages/Publish.jsx'
+import Settings from './pages/Settings.jsx'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -59,7 +61,8 @@ export default function App() {
           <Route path="weryfikacja" element={<Review profile={profile} />} />
           <Route path="weryfikacja/:id" element={<Review profile={profile} />} />
           <Route path="biblioteka" element={<Library profile={profile} />} />
-          <Route path="publikacja" element={soon('Publikacja', 'Etap 4: zapis opisów do Baselinkera.')} />
+          <Route path="publikacja" element={<Publish profile={profile} />} />
+          <Route path="ustawienia" element={profile?.role === 'admin' ? <Settings /> : <Navigate to="/" />} />
           <Route path="reguly" element={soon('Reguły QA', 'Etap 4: zakazane sformułowania i limity.')} />
           <Route path="uzytkownicy" element={profile?.role === 'admin' ? <Users /> : <Navigate to="/" />} />
           <Route path="konto" element={<Account profile={profile} />} />

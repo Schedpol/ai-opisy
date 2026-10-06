@@ -29,7 +29,8 @@ export default function Layout({ profile }) {
             </NavLink>
           ))}
           {profile?.role === 'admin' && (
-            <NavLink to="/uzytkownicy" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>Użytkownicy</NavLink>
+            <><NavLink to="/uzytkownicy" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>Użytkownicy</NavLink>
+            <NavLink to="/ustawienia" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>Ustawienia</NavLink></>
           )}
         </nav>
         <div className="sidebar-foot">

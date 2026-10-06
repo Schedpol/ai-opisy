@@ -257,3 +257,25 @@ a.tag { text-decoration: none; }
 .variants .summary { display: flex; gap: 8px; flex-wrap: wrap; }
 .kid-list { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
 .kid-list .tag { font-variant-numeric: tabular-nums; }
+
+/* Dashboard, publikacja, ustawienia */
+.pipe-stage.alert .pipe-count { color: var(--error); }
+.grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.bar-col { width: 30%; }
+.bar { display: inline-block; width: 100%; height: 8px; border-radius: 4px; background: var(--stone); overflow: hidden; vertical-align: middle; }
+.bar > span { display: block; height: 100%; background: var(--ok); }
+.bar > span.hot { background: var(--warn); }
+.bar.wide { margin: 6px 0 10px; }
+.big { font-size: 30px; font-weight: 700; margin: 0; font-variant-numeric: tabular-nums; }
+.big .muted { font-size: 18px; font-weight: 500; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: var(--radius-s); overflow: hidden; background: var(--surface); }
+.seg-btn { font: inherit; font-size: 14px; border: 0; background: none; padding: 8px 14px; cursor: pointer; color: var(--ink-soft); border-right: 1px solid var(--line); }
+.seg-btn:last-child { border-right: 0; }
+.seg-btn.on { background: var(--ink); color: #fff; }
+.seg-btn .count { margin-left: 4px; opacity: .8; }
+.integ { display: flex; flex-wrap: wrap; gap: 8px 18px; margin: 4px 0 14px; font-size: 14px; }
+.integ-item { display: inline-flex; gap: 6px; align-items: center; }
+.small-btn { margin: 0; padding: 6px 12px; font-size: 13.5px; }
+@media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+th input[type=checkbox], td input[type=checkbox] { display: inline-block; width: auto; margin: 0; padding: 0; }
+td .tag { margin-left: 6px; }
