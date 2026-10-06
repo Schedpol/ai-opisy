@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase, plError } from '../supabase.js'
+import { Link, useNavigate } from 'react-router-dom'
 import ImportPanel from '../components/ImportPanel.jsx'
+import { generateBase } from '../gen.js'
 
 const ATTRS = [['wymiar', 'Wymiar'], ['wysokosc_cm', 'Wys. cm'], ['ksztalt', 'Kształt'], ['wykonczenie', 'Wykończenie'], ['odplyw', 'Odpływ']]
 const minor = f => f.startsWith('Nazwa identyczna') || f === 'Waga = 0' || f.startsWith('Podwójne') || f.startsWith('Kształt z reguły')
@@ -12,17 +14,22 @@ export default function Products() {
   const [error, setError] = useState('')
   const [importing, setImporting] = useState(false)
   const [msg, setMsg] = useState('')
+  const [gen, setGen] = useState({})
+  const nav = useNavigate()
 
   async function load() {
-    const [b, r, f, p] = await Promise.all([
+    const [b, r, f, p, ch, tp, ds] = await Promise.all([
       supabase.from('brands').select('id, name'),
       supabase.from('import_rules').select('*'),
       supabase.from('product_families').select('id, brand_id, model_name, series, category, lead_product_id, technologies').order('model_name'),
       supabase.from('products').select('id, sku, name, family_id, attributes, import_flags').order('sku'),
+      supabase.from('channels').select('id, marketplace, language, active'),
+      supabase.from('templates').select('id, channel_id, brand_id').eq('status', 'aktywny'),
+      supabase.from('descriptions').select('id, family_id, channel_id, product_id, version, status, is_base').eq('is_base', true).order('version', { ascending: false }),
     ])
-    const err = [b, r, f, p].find(x => x.error)?.error
+    const err = [b, r, f, p, ch, tp, ds].find(x => x.error)?.error
     if (err) { setError(plError(err.message)); return }
-    setData({ brands: b.data, rules: r.data, families: f.data, products: p.data })
+    setData({ brands: b.data, rules: r.data, families: f.data, products: p.data, channels: ch.data, templates: tp.data, descriptions: ds.data })
   }
   useEffect(() => { load() }, [])
 
@@ -35,6 +42,13 @@ export default function Products() {
   async function setLead(familyId, productId) {
     const { error } = await supabase.from('product_families').update({ lead_product_id: productId || null }).eq('id', familyId)
     if (error) setError(plError(error.message)); else load()
+  }
+
+  async function generate(fam, ch) {
+    const key = `${fam.id}|${ch.id}`
+    setGen(g => ({ ...g, [key]: { busy: true } }))
+    try { await generateBase(fam.id, ch.id, id => nav(`/weryfikacja/${id}`)) }
+    catch (e) { setGen(g => ({ ...g, [key]: { error: e.message } })) }
   }
 
   if (error) return <section className="page"><h1>Produkty</h1><p className="error">{error}</p></section>
@@ -85,6 +99,21 @@ export default function Products() {
             <label className="tech">Technologie w tej rodzinie <span className="muted">(oddziel przecinkami – fakty o tych technologiach trafią do opisów)</span>
               <input defaultValue={(f.technologies || []).join(', ')} placeholder="np. Stabildense" onBlur={e => e.target.value !== (f.technologies || []).join(', ') && setTech(f.id, e.target.value)} />
             </label>
+            <div className="gen-row">
+              <span className="muted small">Opisy bazowe:</span>
+              {data.channels.filter(ch => ch.active && data.templates.some(t => t.channel_id === ch.id && t.brand_id === f.brand_id)).map(ch => {
+                const last = data.descriptions.find(d => d.family_id === f.id && d.channel_id === ch.id)
+                const g = gen[`${f.id}|${ch.id}`] || {}
+                return (
+                  <span key={ch.id} className="gen-item">
+                    <strong>{ch.marketplace} {ch.language.toUpperCase()}</strong>
+                    {last && <Link to={`/weryfikacja/${last.id}`} className={`tag st-${last.status}`}>v{last.version}</Link>}
+                    <button className="link-dark" disabled={g.busy || !f.lead_product_id} onClick={() => generate(f, ch)}>{g.busy ? 'Uruchamianie…' : last ? 'Generuj ponownie' : 'Generuj'}</button>
+                    {g.error && <span className="error small">{g.error}</span>}
+                  </span>
+                )
+              })}
+            </div>
             <details>
               <summary>Warianty ({items.length})</summary>
               <div className="table-wrap">

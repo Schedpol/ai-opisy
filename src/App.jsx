@@ -12,6 +12,8 @@ import Rules from './pages/Rules.jsx'
 import Knowledge from './pages/Knowledge.jsx'
 import Templates from './pages/Templates.jsx'
 import Keywords from './pages/Keywords.jsx'
+import Review from './pages/Review.jsx'
+import Library from './pages/Library.jsx'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -54,7 +56,9 @@ export default function App() {
           <Route path="wiedza" element={<Knowledge profile={profile} />} />
           <Route path="szablony" element={<Templates profile={profile} />} />
           <Route path="frazy" element={<Keywords />} />
-          <Route path="weryfikacja" element={soon('Weryfikacja', 'Etap 3: oryginał i tłumaczenie PL obok siebie.')} />
+          <Route path="weryfikacja" element={<Review profile={profile} />} />
+          <Route path="weryfikacja/:id" element={<Review profile={profile} />} />
+          <Route path="biblioteka" element={<Library profile={profile} />} />
           <Route path="publikacja" element={soon('Publikacja', 'Etap 4: zapis opisów do Baselinkera.')} />
           <Route path="reguly" element={soon('Reguły QA', 'Etap 4: zakazane sformułowania i limity.')} />
           <Route path="uzytkownicy" element={profile?.role === 'admin' ? <Users /> : <Navigate to="/" />} />

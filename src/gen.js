@@ -1,0 +1,100 @@
+import { supabase } from './supabase.js'
+import { applies } from './knowledge.js'
+import { resolveImages } from './render.js'
+import { runJob } from './jobs.js'
+
+const MARKET = c => `${c.marketplace} ${c.language.toUpperCase()}`
+
+// Zbiera wszystko, czego potrzebuje generacja, i sprawdza warunki wstępne
+export async function buildContext(familyId, channelId) {
+  const { data: family } = await supabase.from('product_families').select('*').eq('id', familyId).single()
+  const [ch, br, tp, lead, facts, banks, lib, rules] = await Promise.all([
+    supabase.from('channels').select('*').eq('id', channelId).single(),
+    supabase.from('brands').select('id, name').eq('id', family.brand_id).single(),
+    supabase.from('templates').select('*').eq('channel_id', channelId).eq('brand_id', family.brand_id).eq('status', 'aktywny').maybeSingle(),
+    family.lead_product_id ? supabase.from('products').select('*').eq('id', family.lead_product_id).single() : Promise.resolve({ data: null }),
+    supabase.from('kb_facts').select('*').eq('status', 'zatwierdzony'),
+    supabase.from('keyword_banks').select('*'),
+    supabase.from('media_library').select('*'),
+    supabase.from('qa_rules').select('*').eq('status', 'aktywna'),
+  ])
+  const channel = ch.data, template = tp.data, product = lead.data
+  const problems = []
+  if (!product) problems.push('Wybierz wariant wiodący rodziny (ekran Produkty).')
+  if (!template) problems.push(`Brak aktywnego szablonu dla ${br.data?.name} · ${MARKET(channel)}.`)
+  const famFacts = (facts.data || []).filter(f => applies(f, family) || (f.level === 'wariant' && f.family_id === family.id))
+  if (!famFacts.length) problems.push('Brak zatwierdzonych faktów dla tej rodziny (Księga wiedzy).')
+  const eq = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
+  const bank = (banks.data || []).find(b => eq(b.category, family.category) && b.language === channel.language)
+  const excluded = new Set(bank?.excluded || [])
+  const keywords = (bank?.keywords || []).filter(k => !excluded.has(k.kw)).map(k => ({ kw: k.kw, volume: k.volume }))
+  if (!keywords.length) problems.push(`Bank fraz „${family.category} · ${channel.language.toUpperCase()}” jest pusty – odśwież go (Frazy kluczowe).`)
+  return { problems, family, channel, brand: br.data, template, product, facts: famFacts, keywords, library: lib.data || [],
+    forbidden: (rules.data || []).filter(r => ['zakazany_wzorzec', 'marka_konkurencji'].includes(r.rule_type) && (!r.language || r.language === channel.language)).map(r => r.pattern) }
+}
+
+function payloadFrom(ctx, extra) {
+  const sections = ctx.template.sections.filter(s => s && s.enabled !== false)
+  return {
+    language: ctx.channel.language, market: MARKET(ctx.channel), brand: ctx.brand.name,
+    family: { model_name: ctx.family.model_name, series: ctx.family.series, category: ctx.family.category },
+    product: { sku: ctx.product.sku, attributes: ctx.product.attributes },
+    facts: ctx.facts.map(f => f.content), keywords: ctx.keywords.slice(0, 150),
+    template: { sections, styles: ctx.template.styles },
+    images: resolveImages(ctx.template, { brand_id: ctx.family.brand_id, family: ctx.family, product: ctx.product, library: ctx.library }),
+    limits: ctx.channel.limits || {}, forbidden: ctx.forbidden,
+    title_pattern: '[typ produktu] [marka] [model], [wymiary] cm, [materiał], [kolor/wykończenie] – zgodnie ze standardem nazw eMAG',
+    ...extra,
+  }
+}
+
+async function nextVersion(familyId, channelId, productId) {
+  const { data } = await supabase.from('descriptions').select('version').eq('family_id', familyId).eq('channel_id', channelId).eq('product_id', productId).order('version', { ascending: false }).limit(1)
+  return (data?.[0]?.version || 0) + 1
+}
+
+async function launch(descId, payload) {
+  try {
+    await runJob('generate_description', { ...payload, description_id: descId }, { timeoutSec: 360 })
+  } catch (e) {
+    await supabase.from('descriptions').update({ status: 'blad', qa: { pass: false, errors: [e.message], warnings: [] } }).eq('id', descId)
+    throw e
+  }
+}
+
+// Nowy opis bazowy rodziny (wariant wiodący) dla kanału
+export async function generateBase(familyId, channelId, onCreated) {
+  const ctx = await buildContext(familyId, channelId)
+  if (ctx.problems.length) throw new Error(ctx.problems.join(' '))
+  const { data: { session } } = await supabase.auth.getSession()
+  const version = await nextVersion(familyId, channelId, ctx.product.id)
+  const ins = await supabase.from('descriptions').insert({ family_id: familyId, product_id: ctx.product.id, channel_id: channelId, template_id: ctx.template.id,
+    is_base: true, version, status: 'generowanie', created_by: session.user.id }).select('id').single()
+  if (ins.error) throw new Error(ins.error.message)
+  onCreated?.(ins.data.id)
+  await launch(ins.data.id, payloadFrom(ctx, { mode: 'full' }))
+  return ins.data.id
+}
+
+// Poprawka wybranych sekcji na podstawie uwag recenzenta → nowa wersja
+export async function regenerateSections(desc, sections, comments, general, onCreated) {
+  const ctx = await buildContext(desc.family_id, desc.channel_id)
+  if (!ctx.template) throw new Error('Brak aktywnego szablonu')
+  const { data: { session } } = await supabase.auth.getSession()
+  const rows = comments.filter(c => c.text.trim()).map(c => ({ description_id: desc.id, section_key: c.section, content: c.text.trim(), author: session.user.id }))
+  if (general.trim()) rows.push({ description_id: desc.id, section_key: null, content: general.trim(), author: session.user.id })
+  if (rows.length) await supabase.from('review_comments').insert(rows)
+  await supabase.from('descriptions').update({ status: 'poprawki' }).eq('id', desc.id)
+  const ins = await supabase.from('descriptions').insert({ family_id: desc.family_id, product_id: desc.product_id, channel_id: desc.channel_id, template_id: ctx.template.id,
+    is_base: desc.is_base, parent_id: desc.parent_id, version: desc.version + 1, fields: desc.fields, translation_pl: desc.translation_pl, meta: desc.meta,
+    status: 'generowanie', created_by: session.user.id }).select('id').single()
+  if (ins.error) throw new Error(ins.error.message)
+  onCreated?.(ins.data.id)
+  const product = ctx.product?.id === desc.product_id ? ctx.product : (await supabase.from('products').select('*').eq('id', desc.product_id).single()).data
+  await launch(ins.data.id, payloadFrom({ ...ctx, product, facts: ctx.facts.length ? ctx.facts : [] }, {
+    mode: 'sections', sections, comments: comments.filter(c => c.text.trim()), general_comment: general.trim(),
+    current_fields: desc.fields, current_translation: desc.translation_pl, keyword_map: desc.meta?.keyword_map,
+  }))
+  await supabase.from('review_comments').update({ status: 'uwzgledniona' }).eq('description_id', desc.id).eq('status', 'otwarta')
+  return ins.data.id
+}

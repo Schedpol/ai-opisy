@@ -49,8 +49,16 @@ export function parseProducts(raw, brands, rules) {
     const imgShape = Object.keys(IMG_SHAPES).find(k => new RegExp(`/${k}/`, 'i').test(p.image || ''))
     if (imgShape && a.ksztalt && IMG_SHAPES[imgShape] !== a.ksztalt) flags.push(`Zdjęcie główne pokazuje kształt „${IMG_SHAPES[imgShape]}”, a wariant to „${a.ksztalt}”`)
     if (p.weight !== undefined && !(Number(String(p.weight).replace(',', '.')) > 0)) flags.push('Waga = 0')
+    // wszystkie zdjęcia SKU z rolą z reguł słownika (pozycja w Base albo fragment nazwy pliku)
+    const imgRules = rules.filter(r => r.active !== false && r.attribute === 'zdjecie' && (!r.brand_id || r.brand_id === brand?.id))
+    const images = (p.images?.length ? p.images : p.image ? [p.image] : []).filter(Boolean).map((url, i) => {
+      const file = String(url).split('/').pop().toLowerCase()
+      const rule = imgRules.find(r => r.match_type === 'filename' && r.pattern && file.includes(r.pattern.toLowerCase()))
+        || imgRules.find(r => r.match_type === 'position' && Number(r.pattern) === i + 1)
+      return { url, position: i + 1, role: rule ? rule.value : null }
+    })
     return {
-      sku, ean: clean(p.ean), name, image_url: p.image || null, bl_id: p.bl_id ? Number(p.bl_id) : null,
+      sku, ean: clean(p.ean), name, image_url: images[0]?.url || null, images, bl_id: p.bl_id ? Number(p.bl_id) : null,
       brand_id: brand?.id || null, brand_name: brand?.name || (m ? m[1] : null),
       model_name: m ? m[3] : null, series: m ? clean(m[4]) : null, category: m ? `brodziki ${a.material === 'akryl' ? 'akrylowe' : a.material}` : null,
       attributes: a, flags,
@@ -76,5 +84,6 @@ export function groupFamilies(parsed) {
 export function rowsFromBaselinkerCsv(rows) {
   return rows.filter(r => r.produkt_sku).map(r => ({
     sku: r.produkt_sku, ean: r.produkt_ean, name: r.produkt_nazwa, image: r.zdjecie, bl_id: r.produkt_id, weight: r.waga,
+    images: [r.zdjecie, ...Array.from({ length: 15 }, (_, i) => r[`zdjecie_dodatkowe_${i + 1}`])].filter(Boolean),
   }))
 }

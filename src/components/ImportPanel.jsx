@@ -65,7 +65,7 @@ export default function ImportPanel({ brands, rules, existingSkus, onSaved, onCl
       }
       const rows = preview.parsed.map(p => ({
         sku: p.sku, ean: p.ean || null, name: p.name, family_id: famIds[`${p.brand_id}|${p.model_name}`] || null,
-        attributes: p.attributes, import_flags: p.flags, image_url: p.image_url, source: p.source, baselinker_product_id: p.bl_id,
+        attributes: p.attributes, import_flags: p.flags, image_url: p.image_url, images: p.images, source: p.source, baselinker_product_id: p.bl_id,
       }))
       for (let i = 0; i < rows.length; i += 200) {
         const { error } = await supabase.from('products').upsert(rows.slice(i, i + 200), { onConflict: 'sku' })

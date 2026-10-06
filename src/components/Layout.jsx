@@ -7,6 +7,7 @@ const NAV = [
   { to: '/slownik', label: 'Słownik importu' },
   { to: '/wiedza', label: 'Księga wiedzy' },
   { to: '/szablony', label: 'Szablony' },
+  { to: '/biblioteka', label: 'Biblioteka grafik' },
   { to: '/frazy', label: 'Frazy kluczowe' },
   { to: '/weryfikacja', label: 'Weryfikacja' },
   { to: '/publikacja', label: 'Publikacja' },
