@@ -4,6 +4,7 @@ import { supabase, ROLE_LABELS } from '../supabase.js'
 const NAV = [
   { to: '/', label: 'Dashboard', end: true },
   { to: '/produkty', label: 'Produkty' },
+  { to: '/slownik', label: 'Słownik importu' },
   { to: '/wiedza', label: 'Księga wiedzy' },
   { to: '/szablony', label: 'Szablony' },
   { to: '/frazy', label: 'Frazy kluczowe' },
