@@ -4,7 +4,7 @@ import { supabase, plError } from '../supabase.js'
 import { parseProducts, groupFamilies, rowsFromBaselinkerCsv } from '../parser.js'
 import { runJob } from '../jobs.js'
 
-const ATTR_COLS = [['wymiar', 'Wymiar'], ['wysokosc_cm', 'Wys. cm'], ['ksztalt', 'Kształt'], ['wykonczenie', 'Wykończenie'], ['powloka', 'Powłoka'], ['odplyw', 'Odpływ']]
+const ATTR_COLS = [['wymiar', 'Wymiar'], ['wysokosc_cm', 'Wys. cm'], ['ksztalt', 'Kształt'], ['wykonczenie', 'Wykończenie'], ['powloka', 'Powłoka'], ['odplyw', 'Odpływ'], ['w_zestawie', 'W zestawie']]
 
 const fmt = v => v == null ? '—' : typeof v === 'number' ? v.toLocaleString('pl-PL') : v
 

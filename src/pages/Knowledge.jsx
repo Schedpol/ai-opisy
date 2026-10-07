@@ -14,7 +14,7 @@ function FactCard({ fact, ctx, canApprove, onChanged }) {
   const [err, setErr] = useState('')
   const notes = (fact.source_note || '').split(' · ').filter(Boolean)
   const needsSource = (fact.source_note || '').startsWith('WYMAGA ŹRÓDŁA')
-  const fams = ctx.families.filter(f => applies(fact, f)).map(f => f.model_name)
+  const fams = ctx.families.filter(f => applies(fact, f, ctx.families)).map(f => f.model_name)
   const dirty = content.trim() !== fact.content || source.trim() !== (fact.source || '')
 
   async function update(patch) {
@@ -218,7 +218,7 @@ export default function Knowledge({ profile }) {
       {tab === 'dokumenty' ? <Documents ctx={ctx} docs={data.docs} onDone={load} /> : (
         <>
           {tab === 'do_akceptacji' && !canApprove && <p className="hint">Fakty zatwierdza osoba z rolą Akceptujący. Możesz poprawiać ich treść i dodawać źródła.</p>}
-          {tab === 'do_akceptacji' && data.facts.some(f => f.level === 'technologia' && !data.families.some(fam => applies(f, fam))) &&
+          {tab === 'do_akceptacji' && data.facts.some(f => f.level === 'technologia' && !data.families.some(fam => applies(f, fam, data.families))) &&
             <p className="hint">Fakty o technologii trafiają do rodzin, którym tę technologię przypiszesz na ekranie Produkty. Przypisuj wyłącznie technologie, które rodzina faktycznie ma – inaczej fakty trafią do niewłaściwych opisów.</p>}
           {tab === 'do_akceptacji' && <AddFact ctx={ctx} onAdded={load} />}
           {shown.length === 0 && <div className="panel empty"><p className="muted">Brak faktów w tej zakładce.</p></div>}

@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import ImportPanel from '../components/ImportPanel.jsx'
 import { generateBase } from '../gen.js'
 
-const ATTRS = [['wymiar', 'Wymiar'], ['wysokosc_cm', 'Wys. cm'], ['ksztalt', 'Kształt'], ['wykonczenie', 'Wykończenie'], ['powloka', 'Powłoka'], ['odplyw', 'Odpływ']]
+const ATTRS = [['wymiar', 'Wymiar'], ['wysokosc_cm', 'Wys. cm'], ['ksztalt', 'Kształt'], ['wykonczenie', 'Wykończenie'], ['powloka', 'Powłoka'], ['odplyw', 'Odpływ'], ['w_zestawie', 'W zestawie']]
 const minor = f => f.startsWith('Nazwa identyczna') || f === 'Waga = 0' || f.startsWith('Podwójne') || f.startsWith('Kształt z reguły') || f.startsWith('Odpływ odczytany')
 
 const fmt = v => v == null ? '—' : typeof v === 'number' ? v.toLocaleString('pl-PL') : v
@@ -77,7 +77,7 @@ export default function Products() {
         </div>
       )}
 
-      {data.families.map(f => {
+      {data.families.filter(f => data.products.some(p => p.family_id === f.id)).map(f => {
         const items = data.products.filter(p => p.family_id === f.id)
         const issues = items.filter(p => (p.import_flags || []).some(x => !minor(x))).length
         return (

@@ -24,7 +24,8 @@ export async function buildContext(familyId, channelId) {
   const problems = []
   if (!product) problems.push('Wybierz wariant wiodący rodziny (ekran Produkty).')
   if (!template) problems.push(`Brak aktywnego szablonu dla ${br.data?.name} · ${MARKET(channel)}.`)
-  const famFacts = (facts.data || []).filter(f => applies(f, family) || (f.level === 'wariant' && f.family_id === family.id))
+  const { data: brandFams } = await supabase.from('product_families').select('id, brand_id, model_name').eq('brand_id', family.brand_id)
+  const famFacts = (facts.data || []).filter(f => applies(f, family, brandFams || []) || (f.level === 'wariant' && f.family_id === family.id))
   if (!famFacts.length) problems.push('Brak zatwierdzonych faktów dla tej rodziny (Księga wiedzy).')
   const eq = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
   const bank = (banks.data || []).find(b => eq(b.category, family.category) && b.language === channel.language)

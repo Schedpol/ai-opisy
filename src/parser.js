@@ -112,7 +112,16 @@ export function parseProducts(raw, brands, rules, pim = new Map()) {
     if (images.length && images.some(im => im.role) && wantDraw && !images.some(im => im.role === wantDraw)) flags.push(`Brak rysunku technicznego dla kształtu „${a.ksztalt}”`)
     const catFromName = m ? (a.material === 'akryl' ? 'brodziki standard' : a.material === 'kompozyt' ? 'brodziki kompozytowe' : `brodziki ${a.material}`) : null
     const category = pimCategory(pr) || catFromName
-    const model = (m ? m[3] : null) || pr?.model || (pr ? (pr.category_path?.slice(-1)[0] || pr.category || null) : null)
+    let model = (m ? m[3] : null) || pr?.model || (pr ? (pr.category_path?.slice(-1)[0] || pr.category || null) : null)
+    // zestaw (np. wanna z nośnikiem) → osobna rodzina „model + nośnik”; same nośniki są wyłączone
+    const isCarrier = /^no[sś]nik/i.test(category || '') || /^(\S+\s+)?no[sś]nik/i.test(name)
+    // źródło prawdy o zestawie = rekord produktu w PIM (nie nazwa w Baselinkerze)
+    const setRules = !isCarrier && model ? rules.filter(r => r.active !== false && r.attribute === 'rodzina' && r.match_type === 'name' && (!r.brand_id || r.brand_id === brand?.id)) : []
+    const hit = txt => setRules.find(r => { try { return new RegExp(r.pattern, 'i').test(txt || '') } catch { return false } })
+    const famRule = pr ? hit(pr.name) : null
+    if (famRule) { model = `${model} + ${famRule.value}`; a.w_zestawie = famRule.value; flags.push(`Zestaw z: ${famRule.value} (wg PIM) – osobna rodzina „${model}”`) }
+    else if (!pr && hit(name)) flags.push(`Nazwa w Baselinkerze sugeruje zestaw z: ${hit(name).value}, ale SKU nie ma w PIM – rodzina zestawu nie została utworzona`)
+    else if (pr && hit(name)) flags.push(`Nazwa w Baselinkerze sugeruje zestaw z: ${hit(name).value}, a PIM nie – sprawdź opis produktu w PIM`)
     return {
       sku, ean: clean(p.ean) || pr?.ean || '', name, image_url: images[0]?.url || null, images, bl_id: p.bl_id ? Number(p.bl_id) : null,
       brand_id: brand?.id || null, brand_name: brand?.name || brandName || null,
