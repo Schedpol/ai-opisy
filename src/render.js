@@ -1,6 +1,7 @@
 // Renderer opisu HTML sterowany szablonem (kolejność sekcji, obrazki, style).
 // Ten sam kod działa w aplikacji (podgląd) i w n8n (generacja) – nie zmieniaj jednego bez drugiego.
-export const DEFAULT_STYLES = { max_width: 920, font_size: 15, line_height: 1.6, text_color: '#333333', heading_color: '#0D1B3E', accent_color: '#1E4D9B', h1_size: 26, h2_size: 22, hero_tag: 'h1' }
+export const DEFAULT_ASSET_BASE = 'https://schedpol.nazwa.pl/AEDLER/'
+export const DEFAULT_STYLES = { asset_base: DEFAULT_ASSET_BASE, max_width: 920, font_size: 15, line_height: 1.6, text_color: '#333333', heading_color: '#0D1B3E', accent_color: '#1E4D9B', h1_size: 26, h2_size: 22, hero_tag: 'h1' }
 
 export function renderDescription(fields, template, images) {
   const st = { ...DEFAULT_STYLES, ...(template?.styles || {}) }
@@ -70,6 +71,7 @@ export function resolveImages(template, { brand_id, family = {}, product = {}, l
     const src = sec.image_source || 'static'
     if (src === 'none') continue
     if (src === 'static') { if (sec.image_url) out[sec.key] = sec.image_url; continue }
+    if (src === 'ftp') { const l = ftpLink(sec, { family, product }, template?.styles?.asset_base); if (l.url) out[sec.key] = l.url; continue }
     if (src === 'product') {
       const imgs = [...(product.images || [])].sort((a, b) => a.position - b.position)
       const role = String(sec.image_role || '').trim().toLowerCase()
@@ -90,4 +92,36 @@ export function resolveImages(template, { brand_id, family = {}, product = {}, l
     else if (sec.image_url) out[sec.key] = sec.image_url
   }
   return out
+}
+
+// ===== Linki do grafik wg konwencji Oli: {baza}/{model}/{kolor}/{ksztalt}/{X}.jpg oraz {baza}/{model}/{X}.jpg =====
+export const FTP_ASSETS = [
+  { x: 'auto-packshot', label: 'Packshot – automatycznie wg odpływu (1 / 1a / 1b)', level: 'variant' },
+  { x: '1', label: '1 – packshot, odpływ w narożniku', level: 'variant' },
+  { x: '1a', label: '1a – packshot, odpływ na środku boku', level: 'variant' },
+  { x: '1b', label: '1b – packshot, odpływ na krótkim boku', level: 'variant' },
+  { x: '2', label: '2 – aranżacja 1', level: 'variant' },
+  { x: '3', label: '3 – aranżacja 2', level: 'variant' },
+  { x: '4', label: '4 – infografika', level: 'variant' },
+  { x: 'auto-drawing', label: 'Rysunek techniczny – automatycznie wg kształtu', level: 'model' },
+]
+const ascii = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ł/g, 'l')
+export const slug = s => ascii(s).trim().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '')
+const SHAPE_DIR = { 'kwadratowy': 'kwadrat', 'prostokątny': 'prostokat', 'półokrągły': 'polokragly', 'pięciokątny': 'pieciokat', 'asymetryczny': 'asymetryczny' }
+const DRAWING_X = { 'kwadratowy': '1', 'prostokątny': '2', 'półokrągły': '3' }
+export function ftpLink(sec, { family = {}, product = {} } = {}, base = DEFAULT_ASSET_BASE) {
+  const a = product.attributes || {}
+  const model = slug(String(family.model_name || '').split(' + ')[0])
+  const root = String(base || DEFAULT_ASSET_BASE).replace(/\/?$/, '/')
+  if (!model) return { url: null, why: 'brak modelu' }
+  if (sec.ftp_x === 'auto-drawing') {
+    const x = DRAWING_X[a.ksztalt]
+    return x ? { url: `${root}${model}/${x}.jpg` } : { url: null, why: `konwencja nie przewiduje rysunku dla kształtu „${a.ksztalt || '—'}”` }
+  }
+  const color = slug(String(a.wykonczenie || '').split('(')[0])
+  const shape = SHAPE_DIR[a.ksztalt]
+  if (!color || !shape) return { url: null, why: !color ? 'brak koloru wariantu' : `brak katalogu dla kształtu „${a.ksztalt || '—'}”` }
+  let x = sec.ftp_x || '1'
+  if (x === 'auto-packshot') x = /krótsz/i.test(a.odplyw || '') ? '1b' : /środku/i.test(a.odplyw || '') ? '1a' : '1'
+  return { url: `${root}${model}/${color}/${shape}/${x}.jpg` }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, plError } from '../supabase.js'
-import { renderDescription, resolveImages, DEFAULT_STYLES } from '../render.js'
+import { renderDescription, resolveImages, DEFAULT_STYLES, FTP_ASSETS, ftpLink } from '../render.js'
 
 function sampleFields(template) {
   const f = { HERO_IMG_ALT: 'Baner', HERO_H1: 'Brodzik akrylowy Aedler Antis 90x90 cm, Smooth White', HERO_LEAD: 'Tu pojawi się lead: 1–2 zdania z najważniejszymi korzyściami i frazą główną.', FAQ_H2: 'Najczęściej zadawane pytania' }
@@ -28,6 +28,9 @@ export default function Templates({ profile }) {
   const [busy, setBusy] = useState(false)
   const [library, setLibrary] = useState([])
   const [prodRoles, setProdRoles] = useState([])
+  const [samples, setSamples] = useState([])
+  const [sampleId, setSampleId] = useState('')
+  const [imgState, setImgState] = useState({})
   const admin = profile?.role === 'admin'
 
   async function load(keepId) {
@@ -37,8 +40,12 @@ export default function Templates({ profile }) {
       supabase.from('brands').select('id, name'),
     ])
     if (t.error) { setMsg({ type: 'error', text: plError(t.error.message) }); return }
-    const [lib, ir] = await Promise.all([supabase.from('media_library').select('*'), supabase.from('import_rules').select('value').eq('attribute', 'zdjecie')])
+    const [lib, ir, fams, prods] = await Promise.all([supabase.from('media_library').select('*'), supabase.from('import_rules').select('value').eq('attribute', 'zdjecie'),
+      supabase.from('product_families').select('id, brand_id, model_name, series, technologies'), supabase.from('products').select('id, sku, family_id, attributes, images').limit(2000)])
     setLibrary(lib.data || []); setProdRoles([...new Set((ir.data || []).map(x => x.value))])
+    const famById = Object.fromEntries((fams.data || []).map(f => [f.id, f]))
+    const list = (prods.data || []).filter(p => famById[p.family_id]).map(p => ({ ...p, family: famById[p.family_id] })).sort((a, b) => a.sku.localeCompare(b.sku))
+    setSamples(list); setSampleId(id => id || list[0]?.id || '')
     setList(t.data); setNames({ c: c.data || [], b: b.data || [] })
     const pick = t.data.find(x => x.id === (keepId || sel)) || t.data[0]
     if (pick) { setSel(pick.id); setDraft({ sections: pick.sections, styles: { ...DEFAULT_STYLES, ...pick.styles } }) }
@@ -47,17 +54,21 @@ export default function Templates({ profile }) {
 
   const current = list?.find(t => t.id === sel)
   const PLACEHOLDER = role => 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="920" height="320"><rect width="100%" height="100%" fill="#E6E8E5"/><text x="50%" y="50%" fill="#4A5672" font-family="Arial" font-size="22" text-anchor="middle">Zdjęcie produktu z Base: ${role || 'pierwsze'}</text></svg>`)
+  const sample = samples.find(p => p.id === sampleId) || null
+  const sampleCtx = sample ? { brand_id: sample.family.brand_id, family: sample.family, product: sample, library } : null
   const preview = useMemo(() => {
     if (!draft) return ''
-    const imgs = {}
+    let imgs = {}
+    if (sampleCtx) imgs = resolveImages(draft, sampleCtx)
     for (const sec of draft.sections.filter(x => x && x.enabled !== false && x.type !== 'faq')) {
       const src = sec.image_source || 'static'
+      if (imgs[sec.key]) continue
       if (src === 'static' && sec.image_url) imgs[sec.key] = sec.image_url
       if (src === 'library') { const hit = library.find(m => (m.role || '').toLowerCase() === (sec.image_role || '').toLowerCase()); if (hit || sec.image_url) imgs[sec.key] = hit ? hit.url : sec.image_url }
       if (src === 'product') imgs[sec.key] = PLACEHOLDER(sec.image_role)
     }
     return renderDescription(sampleFields(draft), draft, imgs)
-  }, [draft, library])
+  }, [draft, library, sampleId, samples])
   const dirty = current && draft && JSON.stringify({ s: current.sections, st: { ...DEFAULT_STYLES, ...current.styles } }) !== JSON.stringify({ s: draft.sections, st: draft.styles })
 
   const setSec = (i, patch) => setDraft(d => ({ ...d, sections: d.sections.map((s, j) => j === i ? { ...s, ...patch } : s) }))
@@ -144,11 +155,29 @@ export default function Templates({ profile }) {
                       <div className="img-row">
                         <label>Obrazek<select value={s.image_source || 'static'} disabled={!admin} onChange={e => setSec(i, { image_source: e.target.value })}>
                           <option value="none">brak</option><option value="static">stały (wgrany do szablonu)</option>
-                          <option value="library">z biblioteki grafik</option><option value="product">zdjęcie produktu z Base</option></select></label>
+                          <option value="library">z biblioteki grafik</option><option value="product">zdjęcie produktu z Base</option>
+                          <option value="ftp">z serwera wg konwencji (link automatyczny)</option></select></label>
+                        {s.image_source === 'ftp' && (
+                          <label>Zasób<select value={s.ftp_x || '1'} disabled={!admin} onChange={e => setSec(i, { ftp_x: e.target.value })}>
+                            {FTP_ASSETS.map(a => <option key={a.x} value={a.x}>{a.label}</option>)}</select></label>
+                        )}
                         {['library', 'product'].includes(s.image_source) && (
                           <label>Rola<input list={s.image_source === 'library' ? 'roles-lib' : 'roles-prod'} value={s.image_role || ''} disabled={!admin} placeholder={s.image_source === 'product' ? 'puste = pierwsze zdjęcie' : 'np. baner'} onChange={e => setSec(i, { image_role: e.target.value })} /></label>
                         )}
                       </div>
+                      {s.image_source === 'ftp' && (() => {
+                        const l = sample ? ftpLink(s, { family: sample.family, product: sample }, draft.styles.asset_base) : { url: null, why: 'wybierz produkt do podglądu' }
+                        const st = l.url ? imgState[l.url] : null
+                        return (
+                          <p className="ftp-link small">
+                            {l.url ? <><a href={l.url} target="_blank" rel="noreferrer">{l.url.replace(/^https?:\/\/[^/]+/, '')}</a>
+                              <img src={l.url} alt="" hidden onLoad={() => setImgState(x => ({ ...x, [l.url]: 'ok' }))} onError={() => setImgState(x => ({ ...x, [l.url]: 'brak' }))} />
+                              {' '}{st === 'ok' ? <span className="tag okt">plik istnieje</span> : st === 'brak' ? <span className="tag err">brak pliku na serwerze</span> : <span className="muted">sprawdzanie…</span>}</>
+                              : <span className="muted">Link nie powstanie: {l.why}</span>}
+                            {sample && <span className="muted"> · dla {sample.sku}</span>}
+                          </p>
+                        )
+                      })()}
                       {['static', 'library'].includes(s.image_source || 'static') && (
                         <div className="img-row">
                           <label>{s.image_source === 'library' ? 'Adres zapasowy (gdy biblioteka nie ma grafiki)' : 'Adres HTTPS'}<input value={s.image_url || ''} disabled={!admin} placeholder="brak" onChange={e => setSec(i, { image_url: e.target.value.trim() })} /></label>
@@ -171,6 +200,7 @@ export default function Templates({ profile }) {
                 <label>Tytuł (px)<input type="number" min="18" max="40" value={draft.styles.h1_size} disabled={!admin} onChange={e => setStyle('h1_size', Number(e.target.value))} /></label>
                 <label>Nagłówki sekcji (px)<input type="number" min="16" max="32" value={draft.styles.h2_size} disabled={!admin} onChange={e => setStyle('h2_size', Number(e.target.value))} /></label>
                 <label>Maks. szerokość (px)<input type="number" min="600" max="1400" step="10" value={draft.styles.max_width} disabled={!admin} onChange={e => setStyle('max_width', Number(e.target.value))} /></label>
+                <label className="span-all">Adres katalogu grafik na serwerze<input value={draft.styles.asset_base || ''} disabled={!admin} onChange={e => setStyle('asset_base', e.target.value.trim())} placeholder="https://schedpol.nazwa.pl/AEDLER/" /></label>
                 <label>Znacznik tytułu<select value={draft.styles.hero_tag} disabled={!admin} onChange={e => setStyle('hero_tag', e.target.value)}><option value="h1">H1</option><option value="h2">H2</option></select></label>
               </div>
               <p className="muted small">eMAG wyświetla nazwę produktu jako H1 strony. Tytuł w opisie jako H2 unika dwóch H1 na jednej stronie – wygląd się nie zmienia.</p>
@@ -179,7 +209,10 @@ export default function Templates({ profile }) {
             {msg && <p className={msg.type} role="status">{msg.text}</p>}
           </div>
           <div className="tpl-preview">
-            <div className="preview-label">Podgląd z przykładową treścią</div>
+            <div className="preview-label">Podgląd z przykładową treścią
+              {samples.length > 0 && <select className="sample-pick" value={sampleId} onChange={e => setSampleId(e.target.value)} aria-label="Produkt do podglądu grafik">
+                {samples.map(p => <option key={p.id} value={p.id}>{p.sku} · {p.family.model_name} · {[p.attributes?.ksztalt, p.attributes?.wykonczenie].filter(Boolean).join(', ')}</option>)}
+              </select>}</div>
             <datalist id="roles-lib">{[...new Set(['baner', ...library.map(m => m.role)])].map(r => <option key={r} value={r} />)}</datalist>
             <datalist id="roles-prod">{[...new Set(['packshot', 'rysunek techniczny', 'aranżacja 1', 'aranżacja 2', 'infografika', ...prodRoles])].map(r => <option key={r} value={r} />)}</datalist>
             <div className="preview-frame" dangerouslySetInnerHTML={{ __html: preview }} />
