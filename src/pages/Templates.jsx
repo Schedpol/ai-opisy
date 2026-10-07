@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase, plError } from '../supabase.js'
 import { renderDescription, resolveImages, DEFAULT_STYLES, FTP_ASSETS, ftpLink } from '../render.js'
 
@@ -19,7 +20,7 @@ function sampleFields(template) {
 
 const SEC_NAME = { hero: 'Nagłówek (hero)', content: 'Sekcja treści', faq: 'FAQ' }
 
-export default function Templates({ profile }) {
+function TemplateEditor({ profile, templateId, crumbs }) {
   const [list, setList] = useState(null)
   const [names, setNames] = useState({})
   const [sel, setSel] = useState(null)
@@ -47,7 +48,7 @@ export default function Templates({ profile }) {
     const list = (prods.data || []).filter(p => famById[p.family_id]).map(p => ({ ...p, family: famById[p.family_id] })).sort((a, b) => a.sku.localeCompare(b.sku))
     setSamples(list); setSampleId(id => id || list[0]?.id || '')
     setList(t.data); setNames({ c: c.data || [], b: b.data || [] })
-    const pick = t.data.find(x => x.id === (keepId || sel)) || t.data[0]
+    const pick = t.data.find(x => x.id === (keepId || templateId))
     if (pick) { setSel(pick.id); setDraft({ sections: pick.sections, styles: { ...DEFAULT_STYLES, ...pick.styles } }) }
   }
   useEffect(() => { load() }, [])
@@ -101,30 +102,18 @@ export default function Templates({ profile }) {
   }
 
   if (!list) return <section className="page"><p className="muted">Ładowanie…</p></section>
+  if (!current) return <section className="page wide">{crumbs}<p className="error">Nie znaleziono szablonu.</p></section>
   const label = t => { const c = names.c.find(x => x.id === t.channel_id); const b = names.b.find(x => x.id === t.brand_id); return `${b?.name || ''} · ${c ? `${c.marketplace} ${c.language.toUpperCase()}` : ''} · ${t.category || 'domyślny'}` }
-  async function newForCategory() {
-    const category = (prompt('Dla jakiej kategorii? (jak w PIM, np. „nośniki”). Nowy szablon będzie kopią obecnie wybranego.') || '').trim().toLowerCase()
-    if (!category) return
-    if (list.some(t => t.channel_id === current.channel_id && t.brand_id === current.brand_id && (t.category || '') === category)) { setMsg({ type: 'error', text: 'Taki szablon już istnieje.' }); return }
-    const base = current.name.split(' · ').slice(0, 2).join(' · ')
-    const { data, error } = await supabase.from('templates').insert({ channel_id: current.channel_id, brand_id: current.brand_id, name: `${base} · ${category}`, sections: draft.sections, styles: draft.styles, version: 1, status: 'aktywny', category }).select('id').single()
-    setMsg(error ? { type: 'error', text: plError(error.message) } : { type: 'ok', text: `Utworzono szablon dla kategorii „${category}”. Zmień tematy sekcji i zapisz.` })
-    if (!error) load(data.id)
-  }
+
 
   return (
     <section className="page wide">
+      {crumbs}
       <header className="page-head">
-        <h1>Szablony</h1>
-        <div className="tpl-pick">
-          <select value={sel || ''} onChange={e => { const t = list.find(x => x.id === e.target.value); setSel(t.id); setDraft({ sections: t.sections, styles: { ...DEFAULT_STYLES, ...t.styles } }); setMsg(null) }} aria-label="Wybierz szablon">
-            {list.map(t => <option key={t.id} value={t.id}>{label(t)} · wersja {t.version}</option>)}
-          </select>
-          {admin && current && <button className="link-dark gap" onClick={newForCategory}>+ szablon dla kategorii</button>}
-        </div>
+        <h1>{current.category ? `Szablon: ${current.category}` : 'Szablon domyślny'}</h1>
+        <span className="muted small">{label(current)} · wersja {current.version}</span>
       </header>
       {!admin && <p className="hint">Szablony edytuje admin. Możesz oglądać podgląd.</p>}
-      <p className="muted small">Generacja używa szablonu kategorii produktu (np. „wanny”), a jeśli go nie ma – domyślnego dla marki i kanału.</p>
       {draft && (
         <div className="tpl-grid">
           <div className="tpl-editor">
@@ -219,6 +208,148 @@ export default function Templates({ profile }) {
           </div>
         </div>
       )}
+    </section>
+  )
+}
+
+// ===== Nawigacja: kanał sprzedaży → rynek → kategoria → edytor =====
+const LANG_NAME = { ro: 'Rumunia', hu: 'Węgry', bg: 'Bułgaria', de: 'Niemcy', pl: 'Polska', fr: 'Francja' }
+const enc = encodeURIComponent
+
+function Crumbs({ mp, ch, tpl }) {
+  return (
+    <div className="crumbs" role="navigation" aria-label="Ścieżka">
+      <Link to="/szablony">Szablony</Link>
+      {mp && <><span>›</span>{ch ? <Link to={`/szablony/${enc(mp)}`}>{mp}</Link> : <strong>{mp}</strong>}</>}
+      {ch && <><span>›</span>{tpl ? <Link to={`/szablony/${enc(mp)}/${ch.id}`}>{ch.language.toUpperCase()}</Link> : <strong>{ch.language.toUpperCase()}</strong>}</>}
+      {tpl && <><span>›</span><strong>{tpl.category || 'domyślny'}</strong></>}
+    </div>
+  )
+}
+
+export default function Templates({ profile }) {
+  const { mp, ch: chId, tid } = useParams()
+  const nav = useNavigate()
+  const [d, setD] = useState(null)
+  const [msg, setMsg] = useState(null)
+  const admin = profile?.role === 'admin'
+
+  async function load() {
+    const [t, c, b, f] = await Promise.all([
+      supabase.from('templates').select('id, channel_id, brand_id, name, category, version, status, sections').order('name'),
+      supabase.from('channels').select('id, code, marketplace, language, active').order('code'),
+      supabase.from('brands').select('id, name'),
+      supabase.from('product_families').select('brand_id, category'),
+    ])
+    setD({ templates: t.data || [], channels: c.data || [], brands: b.data || [], families: f.data || [] })
+  }
+  useEffect(() => { load() }, [])
+  if (!d) return <section className="page"><p className="muted">Ładowanie…</p></section>
+
+  const channel = d.channels.find(c => c.id === chId)
+  const tpl = d.templates.find(t => t.id === tid)
+  if (tid) return <TemplateEditor key={tid} profile={profile} templateId={tid} crumbs={<Crumbs mp={mp} ch={channel} tpl={tpl} />} />
+
+  const brandName = id => d.brands.find(b => b.id === id)?.name || '—'
+  const active = d.templates.filter(t => t.status === 'aktywny')
+  const order = { ro: 1, hu: 2, bg: 3 }
+
+  // 1) kanały sprzedaży
+  if (!mp) {
+    const mps = [...new Set(d.channels.map(c => c.marketplace))]
+    return (
+      <section className="page wide">
+        <h1>Szablony</h1>
+        <p className="muted lead">Wybierz kanał sprzedaży, potem rynek i kategorię. Generacja używa szablonu kategorii produktu, a jeśli go nie ma – szablonu domyślnego dla rynku.</p>
+        <div className="nav-cards">
+          {mps.map(m => {
+            const chs = d.channels.filter(c => c.marketplace === m)
+            const n = active.filter(t => chs.some(c => c.id === t.channel_id)).length
+            return (
+              <Link key={m} to={`/szablony/${enc(m)}`} className="nav-card">
+                <strong>{m}</strong>
+                <span className="muted">{chs.length} {chs.length === 1 ? 'rynek' : chs.length < 5 ? 'rynki' : 'rynków'} · {n} szablonów</span>
+                <span className="nav-tags">{chs.sort((a, b) => (order[a.language] || 9) - (order[b.language] || 9)).map(c => <span key={c.id} className={c.active ? 'tag' : 'tag st-none'}>{c.language.toUpperCase()}</span>)}</span>
+              </Link>
+            )
+          })}
+        </div>
+      </section>
+    )
+  }
+
+  // 2) rynki kanału
+  if (!chId) {
+    const chs = d.channels.filter(c => c.marketplace === mp).sort((a, b) => (order[a.language] || 9) - (order[b.language] || 9))
+    return (
+      <section className="page wide">
+        <Crumbs mp={mp} />
+        <h1>{mp} – rynki</h1>
+        <div className="nav-cards">
+          {chs.map(c => {
+            const ts = active.filter(t => t.channel_id === c.id)
+            const cats = ts.filter(t => t.category).map(t => t.category)
+            return (
+              <Link key={c.id} to={`/szablony/${enc(mp)}/${c.id}`} className="nav-card">
+                <strong>{c.marketplace} {c.language.toUpperCase()}</strong>
+                <span className="muted">{LANG_NAME[c.language] || c.language}{!c.active && ' · kanał nieaktywny'}</span>
+                <span className="muted small">{ts.some(t => !t.category) ? 'szablon domyślny' : 'brak szablonu domyślnego'}{cats.length ? ` + ${cats.length} kategorii: ${cats.join(', ')}` : ''}</span>
+              </Link>
+            )
+          })}
+        </div>
+      </section>
+    )
+  }
+
+  // 3) kategorie na rynku
+  if (!channel) return <section className="page"><Crumbs mp={mp} /><p className="error">Nie znaleziono rynku.</p></section>
+  const here = active.filter(t => t.channel_id === channel.id)
+  const brandsHere = [...new Set([...here.map(t => t.brand_id)])]
+  async function createFor(brandId, category) {
+    const base = here.find(t => t.brand_id === brandId && !t.category)
+    if (!base) { setMsg({ type: 'error', text: 'Najpierw potrzebny jest szablon domyślny dla tej marki i rynku.' }); return }
+    const { data: full } = await supabase.from('templates').select('*').eq('id', base.id).single()
+    const { data, error } = await supabase.from('templates').insert({ channel_id: channel.id, brand_id: brandId, name: `${base.name.split(' · ').slice(0, 2).join(' · ')} · ${category}`,
+      sections: full.sections, styles: full.styles, version: 1, status: 'aktywny', category }).select('id').single()
+    if (error) setMsg({ type: 'error', text: plError(error.message) }); else nav(`/szablony/${enc(mp)}/${channel.id}/${data.id}`)
+  }
+  return (
+    <section className="page wide">
+      <Crumbs mp={mp} ch={channel} />
+      <h1>{channel.marketplace} {channel.language.toUpperCase()} – kategorie</h1>
+      {msg && <p className={msg.type} role="status">{msg.text}</p>}
+      {brandsHere.length === 0 && <div className="panel empty"><p className="muted">Na tym rynku nie ma jeszcze szablonów.</p></div>}
+      {brandsHere.map(bid => {
+        const ts = here.filter(t => t.brand_id === bid).sort((a, b) => (a.category ? 1 : 0) - (b.category ? 1 : 0) || String(a.category).localeCompare(String(b.category), 'pl'))
+        const covered = new Set(ts.map(t => t.category).filter(Boolean))
+        const missing = [...new Set(d.families.filter(f => f.brand_id === bid && f.category && !covered.has(f.category)).map(f => f.category))].sort()
+        return (
+          <div key={bid} className="panel">
+            <h2>{brandName(bid)}</h2>
+            <div className="table-wrap"><table className="compact cat-table">
+              <thead><tr><th>Kategoria</th><th>Sekcje</th><th>Wersja</th><th /></tr></thead>
+              <tbody>
+                {ts.map(t => (
+                  <tr key={t.id}>
+                    <td><strong>{t.category || 'domyślny'}</strong>{!t.category && <span className="muted small"> – dla kategorii bez własnego szablonu</span>}</td>
+                    <td className="muted">{(t.sections || []).filter(s => s && s.enabled !== false && s.type === 'content').map(s => s.topic).join(' · ')}</td>
+                    <td className="mono">v{t.version}</td>
+                    <td className="actions"><Link to={`/szablony/${enc(mp)}/${channel.id}/${t.id}`}>{admin ? 'Edytuj' : 'Podgląd'}</Link></td>
+                  </tr>
+                ))}
+                {missing.map(c => (
+                  <tr key={c} className="inactive-row">
+                    <td>{c}</td><td className="muted">korzysta z szablonu domyślnego</td><td />
+                    <td className="actions">{admin && <button className="link-dark" onClick={() => createFor(bid, c)}>Utwórz szablon</button>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table></div>
+            {admin && <button className="link-dark" onClick={() => { const c = (prompt('Nazwa kategorii (jak w PIM, małymi literami, np. „nośniki”):') || '').trim().toLowerCase(); if (c) createFor(bid, c) }}>+ szablon dla innej kategorii</button>}
+          </div>
+        )
+      })}
     </section>
   )
 }

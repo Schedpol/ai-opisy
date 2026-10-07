@@ -60,6 +60,9 @@ export default function App() {
           <Route path="slownik" element={<Rules profile={profile} />} />
           <Route path="wiedza" element={<Knowledge profile={profile} />} />
           <Route path="szablony" element={<Templates profile={profile} />} />
+          <Route path="szablony/:mp" element={<Templates profile={profile} />} />
+          <Route path="szablony/:mp/:ch" element={<Templates profile={profile} />} />
+          <Route path="szablony/:mp/:ch/:tid" element={<Templates profile={profile} />} />
           <Route path="frazy" element={<Keywords profile={profile} />} />
           <Route path="weryfikacja" element={<Review profile={profile} />} />
           <Route path="weryfikacja/:id" element={<Review profile={profile} />} />

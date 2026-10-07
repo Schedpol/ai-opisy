@@ -333,3 +333,20 @@ table.rules td.rule-text textarea { width: 100%; font: inherit; font-size: 13.5p
 .span-all { grid-column: 1 / -1; }
 .preview-label { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .sample-pick { max-width: 100%; padding: 6px 8px; font-size: 13px; }
+/* Szablony: nawigacja */
+.crumbs { display: flex; gap: 8px; align-items: center; font-size: 14px; margin-bottom: 8px; flex-wrap: wrap; }
+.crumbs span { color: var(--ink-soft); }
+.nav-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.nav-card { display: flex; flex-direction: column; gap: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-m); padding: 18px 20px; text-decoration: none; color: var(--ink); transition: border-color .15s; }
+.nav-card:hover { border-color: var(--action); }
+.nav-card strong { font-size: 18px; }
+.nav-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.cat-table td { white-space: normal; }
+.cat-table td.muted { font-size: 13px; }
+tr.inactive-row td { color: var(--ink-soft); }
+.page .crumbs { flex-direction: row; justify-content: flex-start; }
+.cat-table { width: 100%; }
+.cat-table td.actions { white-space: nowrap; width: 1%; }
+table.compact.cat-table td { white-space: normal; }
+table.compact.cat-table td.actions { white-space: nowrap; width: 1%; text-align: right; }
+table.compact.cat-table td.mono { width: 1%; }
