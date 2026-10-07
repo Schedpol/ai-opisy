@@ -359,3 +359,4 @@ pre.code-view { background: #0D1B3E; color: #E8EEF9; padding: 16px; border-radiu
 td.nowrap { white-space: nowrap; }
 .copy-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
 .copy-row label { text-align: left; }
+.copy-row.left { justify-content: flex-start; }

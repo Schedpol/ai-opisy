@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { copyTemplates } from '../channels.js'
+import { copyTemplates, createBlankTemplates } from '../channels.js'
 import { supabase, plError } from '../supabase.js'
 import { renderDescription, resolveImages, DEFAULT_STYLES, FTP_ASSETS, ftpLink, OUTPUT_PRESETS } from '../render.js'
 
@@ -249,24 +249,42 @@ function TemplateEditor({ profile, templateId, crumbs }) {
 }
 
 // ===== Nawigacja: kanał sprzedaży → rynek → kategoria → edytor =====
-function CopyPanel({ admin, channel, channels, onDone }) {
-  const [src, setSrc] = useState(channels.find(c => c.code === 'emag_ro')?.id || channels[0]?.id || '')
+function CopyPanel({ admin, channel, channels, brands, onDone }) {
+  const nav = useNavigate()
+  const [brandId, setBrandId] = useState(brands[0]?.id || '')
   const [fmt, setFmt] = useState(/kaufland/i.test(channel.marketplace) ? 'kaufland' : '')
+  const [src, setSrc] = useState(channels.find(c => c.code === 'emag_ro')?.id || channels[0]?.id || '')
   const [state, setState] = useState(null)
-  async function run() {
+  const formats = Object.entries(OUTPUT_PRESETS).filter(([k]) => k !== 'custom')
+  async function blank() {
+    setState({ busy: true })
+    try {
+      const r = await createBlankTemplates(channel, brands.filter(b => b.id === brandId), fmt || 'standard')
+      if (r.ids[0]) nav(`/szablony/${encodeURIComponent(channel.marketplace)}/${channel.id}/${r.ids[0]}`); else { setState({ ok: 'Szablon dla tej marki już istnieje.' }); onDone() }
+    } catch (e) { setState({ err: plError(e.message) }) }
+  }
+  async function copy() {
     setState({ busy: true })
     try { const r = await copyTemplates(channels.find(c => c.id === src), channel, fmt); setState({ ok: `Skopiowano szablony: ${r.copied}.` }); onDone() }
     catch (e) { setState({ err: plError(e.message) }) }
   }
+  if (!admin) return <div className="panel empty"><p className="muted">Na tym rynku nie ma jeszcze szablonów. Szablony dodaje admin.</p></div>
   return (
-    <div className="panel empty">
-      <p className="muted">Na tym rynku nie ma jeszcze szablonów.</p>
-      {!admin ? <p className="muted small">Szablony dodaje admin.</p> : channels.length === 0 ? <p className="hint">Żaden inny rynek nie ma szablonów do skopiowania.</p> : (
-        <div className="copy-row">
-          <label>Skopiuj szablony z<select value={src} onChange={e => setSrc(e.target.value)}>{channels.map(c => <option key={c.id} value={c.id}>{c.marketplace} {c.language.toUpperCase()}</option>)}</select></label>
-          <label>Format HTML<select value={fmt} onChange={e => setFmt(e.target.value)}><option value="">jak w źródle</option>{Object.entries(OUTPUT_PRESETS).filter(([k]) => k !== 'custom').map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
-          <button className="btn" onClick={run} disabled={state?.busy}>{state?.busy ? 'Kopiowanie…' : 'Skopiuj szablony'}</button>
-        </div>
+    <div className="panel">
+      <h2>Na tym rynku nie ma jeszcze szablonów</h2>
+      <div className="copy-row left">
+        {brands.length > 1 && <label>Marka<select value={brandId} onChange={e => setBrandId(e.target.value)}>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>}
+        <label>Format HTML<select value={fmt} onChange={e => setFmt(e.target.value)}><option value="">eMAG – bogaty HTML (domyślny)</option>{formats.map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
+        <button className="btn" onClick={blank} disabled={state?.busy || !brandId}>{state?.busy ? 'Tworzenie…' : 'Nowy szablon od zera'}</button>
+      </div>
+      <p className="muted small">Powstanie szablon domyślny ze standardowymi sekcjami (tytuł, 5 sekcji treści, FAQ) w wybranym formacie – od razu otworzy się edytor.</p>
+      {channels.length > 0 && (
+        <details><summary className="small">albo skopiuj szablony z innego rynku</summary>
+          <div className="copy-row left">
+            <label>Rynek źródłowy<select value={src} onChange={e => setSrc(e.target.value)}>{channels.map(c => <option key={c.id} value={c.id}>{c.marketplace} {c.language.toUpperCase()}</option>)}</select></label>
+            <button className="btn ghost" onClick={copy} disabled={state?.busy}>Skopiuj szablony</button>
+          </div>
+        </details>
       )}
       {state?.ok && <p className="ok">{state.ok}</p>}{state?.err && <p className="error">{state.err}</p>}
     </div>
@@ -379,7 +397,7 @@ export default function Templates({ profile }) {
       <Crumbs mp={mp} ch={channel} />
       <h1>{channel.marketplace} {channel.language.toUpperCase()} – kategorie</h1>
       {msg && <p className={msg.type} role="status">{msg.text}</p>}
-      {brandsHere.length === 0 && <CopyPanel admin={admin} channel={channel} channels={d.channels.filter(c => c.id !== channel.id && active.some(t => t.channel_id === c.id))} onDone={load} />}
+      {brandsHere.length === 0 && <CopyPanel admin={admin} channel={channel} brands={d.brands.filter(b => d.families.some(f => f.brand_id === b.id)).length ? d.brands.filter(b => d.families.some(f => f.brand_id === b.id)) : d.brands} channels={d.channels.filter(c => c.id !== channel.id && active.some(t => t.channel_id === c.id))} onDone={load} />}
       {brandsHere.map(bid => {
         const ts = here.filter(t => t.brand_id === bid).sort((a, b) => (a.category ? 1 : 0) - (b.category ? 1 : 0) || String(a.category).localeCompare(String(b.category), 'pl'))
         const covered = new Set(ts.map(t => t.category).filter(Boolean))

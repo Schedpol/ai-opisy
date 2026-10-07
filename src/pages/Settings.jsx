@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, plError } from '../supabase.js'
 import { runJob, PUBLISH_URL } from '../jobs.js'
 import { LANGS, BASE_FORBIDDEN } from '../languages.js'
-import { copyTemplates, deleteChannel } from '../channels.js'
+import { copyTemplates, deleteChannel, createBlankTemplates, activeBrands } from '../channels.js'
 import { OUTPUT_PRESETS } from '../render.js'
 
 const plN = (n, one, few, many) => `${n} ${n === 1 ? one : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? few : many}`
@@ -17,7 +17,10 @@ function AddChannel({ channels, onAdded }) {
   const set = patch => setF(x => { const n = { ...x, ...patch }; if ('marketplace' in patch || 'language' in patch) n.code = codeOf(n.marketplace || '', n.language); return n })
   const isAmazon = /amazon/i.test(f.marketplace)
   const dup = channels.find(c => c.marketplace.toLowerCase() === f.marketplace.trim().toLowerCase() && c.language === f.language)
-  const source = channels.find(c => c.id === f.copy_from) || channels.find(c => c.code === 'emag_ro') || channels[0]
+  // domyślnie: kolejny rynek znanego marketplace'u → kopia z niego; nowy marketplace → szablon od zera
+  const sameMp = channels.find(c => c.marketplace.toLowerCase() === f.marketplace.trim().toLowerCase())
+  const tplMode = f.copy_from || (sameMp ? sameMp.id : 'blank')
+  const source = tplMode !== 'blank' && tplMode !== 'none' ? channels.find(c => c.id === tplMode) : null
   // podpowiedź formatu: Kaufland → prosty HTML
   useEffect(() => { if (/kaufland/i.test(f.marketplace) && !f.format) setF(x => ({ ...x, format: 'kaufland' })) }, [f.marketplace])
 
@@ -33,10 +36,17 @@ function AddChannel({ channels, onAdded }) {
       }).select().single()
       if (error) throw error
       steps.push(`Kanał ${ch.marketplace} ${ch.language.toUpperCase()} utworzony${isAmazon ? ' jako nieaktywny (Amazon wymaga osobnego formatu opisu)' : ''}.`)
-      // 2) szablony skopiowane z rynku źródłowego (opcjonalnie od razu z innym formatem HTML)
+      // 2) szablony: kopia z innego rynku albo nowe od zera (dla każdej marki z produktami)
+      let blankNeeded = tplMode === 'blank'
       if (source) {
         const r = await copyTemplates(source, ch, f.format)
-        steps.push(r.copied ? `Skopiowano ${plN(r.copied, 'szablon', 'szablony', 'szablonów')} z ${source.marketplace} ${source.language.toUpperCase()}${r.withCategories ? ' (domyślny + kategorie)' : ''}${f.format ? `, format: ${OUTPUT_PRESETS[f.format].label}` : ''}.` : `Rynek ${source.marketplace} ${source.language.toUpperCase()} nie ma szablonów do skopiowania.`)
+        if (r.copied) steps.push(`Skopiowano ${plN(r.copied, 'szablon', 'szablony', 'szablonów')} z ${source.marketplace} ${source.language.toUpperCase()}${r.withCategories ? ' (domyślny + kategorie)' : ''}${f.format ? `, format: ${OUTPUT_PRESETS[f.format].label}` : ''}.`)
+        else { steps.push(`Rynek ${source.marketplace} ${source.language.toUpperCase()} nie ma szablonów do skopiowania – tworzę szablon od zera.`); blankNeeded = true }
+      }
+      if (blankNeeded) {
+        const brands = await activeBrands()
+        const r = await createBlankTemplates(ch, brands, f.format || 'standard')
+        steps.push(`Utworzono ${plN(r.created, 'nowy szablon', 'nowe szablony', 'nowych szablonów')} od zera (${brands.map(b => b.name).join(', ')}), format: ${OUTPUT_PRESETS[f.format || 'standard'].label}. Dostosuj sekcje w zakładce Szablony.`)
       }
       // 3) banki fraz dla wszystkich kategorii w nowym języku (puste frazy startowe – do uzupełnienia w języku rynku)
       if (f.banks) {
@@ -69,9 +79,12 @@ function AddChannel({ channels, onAdded }) {
           <label>Język klucza Baselinkera<input value={f.bl_lang} onChange={e => setF({ ...f, bl_lang: e.target.value })} placeholder={`puste = ${f.language}`} /></label>
           <label>Pole opisu<input value={f.desc_field} onChange={e => setF({ ...f, desc_field: e.target.value })} /></label>
           <label>Limit tytułu (znaki)<input type="number" min="40" max="500" value={f.title_max} onChange={e => setF({ ...f, title_max: e.target.value })} /></label>
-          <label>Szablony skopiuj z<select value={f.copy_from || source?.id || ''} onChange={e => setF({ ...f, copy_from: e.target.value })}>{channels.map(c => <option key={c.id} value={c.id}>{c.marketplace} {c.language.toUpperCase()}</option>)}</select></label>
-          <label>Format HTML skopiowanych szablonów<select value={f.format} onChange={e => setF({ ...f, format: e.target.value })}>
-            <option value="">jak w szablonach źródłowych</option>{Object.entries(OUTPUT_PRESETS).filter(([k]) => k !== 'custom').map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
+          <label>Szablony<select value={tplMode} onChange={e => setF({ ...f, copy_from: e.target.value })}>
+            <option value="blank">nowy szablon od zera</option>
+            {channels.map(c => <option key={c.id} value={c.id}>skopiuj z {c.marketplace} {c.language.toUpperCase()}</option>)}
+            <option value="none">bez szablonów (dodam później)</option></select></label>
+          {tplMode !== 'none' && <label>Format HTML szablonów<select value={f.format} onChange={e => setF({ ...f, format: e.target.value })}>
+            <option value="">{tplMode === 'blank' ? 'eMAG – bogaty HTML (domyślny)' : 'jak w szablonach źródłowych'}</option>{Object.entries(OUTPUT_PRESETS).filter(([k]) => k !== 'custom').map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>}
         </div>
         <label className="check"><input type="checkbox" checked={f.banks} onChange={e => setF({ ...f, banks: e.target.checked })} /> załóż banki fraz dla wszystkich kategorii w tym języku</label>
         {BASE_FORBIDDEN[f.language] && <label className="check"><input type="checkbox" checked={f.qa} onChange={e => setF({ ...f, qa: e.target.checked })} /> dodaj podstawowe zakazane sformułowania QA ({BASE_FORBIDDEN[f.language].slice(0, 3).join(', ')}…)</label>}
