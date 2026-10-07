@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase, plError } from '../supabase.js'
-import { renderDescription, resolveImages, DEFAULT_STYLES, FTP_ASSETS, ftpLink } from '../render.js'
+import { renderDescription, resolveImages, DEFAULT_STYLES, FTP_ASSETS, ftpLink, OUTPUT_PRESETS } from '../render.js'
 
 function sampleFields(template) {
   const f = { HERO_IMG_ALT: 'Baner', HERO_H1: 'Brodzik akrylowy Aedler Antis 90x90 cm, Smooth White', HERO_LEAD: 'Tu pojawi się lead: 1–2 zdania z najważniejszymi korzyściami i frazą główną.', FAQ_H2: 'Najczęściej zadawane pytania' }
@@ -32,6 +32,7 @@ function TemplateEditor({ profile, templateId, crumbs }) {
   const [samples, setSamples] = useState([])
   const [sampleId, setSampleId] = useState('')
   const [imgState, setImgState] = useState({})
+  const [showCode, setShowCode] = useState(false)
   const admin = profile?.role === 'admin'
 
   async function load(keepId) {
@@ -75,6 +76,14 @@ function TemplateEditor({ profile, templateId, crumbs }) {
   const setSec = (i, patch) => setDraft(d => ({ ...d, sections: d.sections.map((s, j) => j === i ? { ...s, ...patch } : s) }))
   const move = (i, dir) => setDraft(d => { const a = [...d.sections]; const j = i + dir; if (j < 0 || j >= a.length) return d; [a[i], a[j]] = [a[j], a[i]]; return { ...d, sections: a } })
   const setStyle = (k, v) => setDraft(d => ({ ...d, styles: { ...d.styles, [k]: v } }))
+  const output = { ...OUTPUT_PRESETS.standard.output, ...(draft?.styles?.output || {}) }
+  const setOut = patch => setStyle('output', { ...output, ...patch })
+  const presetOf = o => o.mode === 'standard' && !o.allowed_tags && o.keep_styles !== false && o.images !== false ? 'standard' : (o.html === OUTPUT_PRESETS.kaufland.output.html ? 'kaufland' : 'custom')
+  function pickPreset(key) {
+    if (key === 'custom' && output.mode === 'custom') return
+    const base = OUTPUT_PRESETS[key].output
+    setStyle('output', key === 'custom' ? { ...base, html: output.html || OUTPUT_PRESETS.kaufland.output.html, allowed_tags: output.allowed_tags } : { ...base })
+  }
   function addSection() {
     const used = draft.sections.map(s => s.key)
     let n = 1; while (used.includes(`S${n}`)) n++
@@ -180,7 +189,29 @@ function TemplateEditor({ profile, templateId, crumbs }) {
               {admin && <button className="link-dark" onClick={addSection}>+ Dodaj sekcję treści</button>}
             </div>
             <div className="panel">
+              <h2>Format HTML</h2>
+              <label>Format<select value={presetOf(output)} disabled={!admin} onChange={e => pickPreset(e.target.value)}>
+                {Object.entries(OUTPUT_PRESETS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
+              {output.mode === 'custom' && (
+                <>
+                  <label>Szkielet HTML<textarea className="code" rows={12} value={output.html} disabled={!admin} onChange={e => setOut({ html: e.target.value })} spellCheck={false} /></label>
+                  <details className="fields-help"><summary className="small">Dostępne pola</summary>
+                    <p className="small"><code>{'{{TYTUL}}'}</code> <code>{'{{LEAD}}'}</code> <code>{'{{HERO_IMG}}'}</code> · pętla sekcji <code>{'{{#sekcje}}…{{/sekcje}}'}</code> z polami <code>{'{{H2}} {{P}} {{P_BOLD}} {{AKCENT}} {{IMG}} {{IMG_ALT}}'}</code>, lista punktów <code>{'{{#MA_LI}}<ul>{{#LI}}<li>{{.}}</li>{{/LI}}</ul>{{/MA_LI}}'}</code> · FAQ <code>{'{{#MA_FAQ}}{{FAQ_H2}}{{/MA_FAQ}}'}</code>, <code>{'{{#faq}}{{Q}} {{A}}{{/faq}}'}</code> · konkretne pole sekcji, np. <code>{'{{S1_H2}}'}</code>, <code>{'{{S2_LI1}}'}</code>, <code>{'{{S1_IMG}}'}</code>.</p>
+                    <p className="small"><code>{'{{#pole}}…{{/pole}}'}</code> pokazuje fragment tylko, gdy pole nie jest puste; <code>{'{{^pole}}…{{/pole}}'}</code> – gdy jest puste. Treść AI wstawiaj zawsze w podwójnych nawiasach – są bezpiecznie escapowane.</p>
+                  </details>
+                </>
+              )}
+              <div className="grid-form">
+                <label className="span-all">Dozwolone znaczniki<input value={output.allowed_tags} disabled={!admin} onChange={e => setOut({ allowed_tags: e.target.value })} placeholder="puste = bez ograniczeń, np. h2, h3, p, ul, li, b" /></label>
+                <label>Limit znaków HTML<input type="number" min="0" step="100" value={output.max_chars || 0} disabled={!admin} onChange={e => setOut({ max_chars: Number(e.target.value) || 0 })} /></label>
+              </div>
+              <label className="check"><input type="checkbox" checked={output.keep_styles !== false} disabled={!admin} onChange={e => setOut({ keep_styles: e.target.checked })} /> zachowaj style (atrybut style)</label>
+              <label className="check"><input type="checkbox" checked={output.images !== false} disabled={!admin} onChange={e => setOut({ images: e.target.checked })} /> zachowaj obrazki</label>
+              <p className="muted small">Znaczniki spoza listy są usuwane po wygenerowaniu (treść zostaje), skrypty i atrybuty zdarzeń zawsze. Opis dłuższy niż limit nie przejdzie QA. 0 = bez limitu.</p>
+            </div>
+            <div className="panel">
               <h2>Wygląd</h2>
+              {output.mode === 'custom' && <p className="hint">Przy własnym szkielecie HTML kolory i rozmiary poniżej nie są używane – wygląd określa szkielet.</p>}
               <div className="grid-form">
                 <label>Kolor tekstu<input type="color" value={draft.styles.text_color} disabled={!admin} onChange={e => setStyle('text_color', e.target.value)} /></label>
                 <label>Kolor nagłówków<input type="color" value={draft.styles.heading_color} disabled={!admin} onChange={e => setStyle('heading_color', e.target.value)} /></label>
@@ -204,7 +235,11 @@ function TemplateEditor({ profile, templateId, crumbs }) {
               </select>}</div>
             <datalist id="roles-lib">{[...new Set(['baner', ...library.map(m => m.role)])].map(r => <option key={r} value={r} />)}</datalist>
             <datalist id="roles-prod">{[...new Set(['packshot', 'rysunek techniczny', 'aranżacja 1', 'aranżacja 2', 'infografika', ...prodRoles])].map(r => <option key={r} value={r} />)}</datalist>
-            <div className="preview-frame" dangerouslySetInnerHTML={{ __html: preview }} />
+            <div className="preview-tools">
+              <button className="link-dark" onClick={() => setShowCode(v => !v)}>{showCode ? 'Pokaż podgląd' : 'Pokaż kod HTML'}</button>
+              <span className={output.max_chars && preview.length > output.max_chars ? 'tag err' : 'muted small'}>{preview.length} znaków HTML{output.max_chars ? ` / limit ${output.max_chars}` : ''}</span>
+            </div>
+            {showCode ? <pre className="code-view">{preview}</pre> : <div className="preview-frame" dangerouslySetInnerHTML={{ __html: preview }} />}
           </div>
         </div>
       )}

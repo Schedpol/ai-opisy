@@ -351,3 +351,7 @@ table.compact.cat-table td { white-space: normal; }
 table.compact.cat-table td.actions { white-space: nowrap; width: 1%; text-align: right; }
 table.compact.cat-table td.mono { width: 1%; }
 ul.steps { margin: 12px 0 0; padding-left: 20px; } ul.steps li { margin: 4px 0; }
+textarea.code, pre.code-view { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12.5px; line-height: 1.5; }
+pre.code-view { background: #0D1B3E; color: #E8EEF9; padding: 16px; border-radius: var(--radius-m); white-space: pre-wrap; word-break: break-word; max-height: 80vh; overflow: auto; }
+.preview-tools { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
+.fields-help code { background: var(--bg); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
