@@ -1,7 +1,7 @@
 // Rozpoznawanie atrybutów wariantów z nazwy, SKU i ścieżki zdjęcia.
 // Ta sama logika dla importu z Baselinkera i z pliku CSV.
 
-const NAME_RX = /^(\S+)\s+Brodzik\s+(\S+)\s+(\S+)\s+(.+?)\s+(\d+)\s*x\s*(\d+)\s*x\s*(\d+(?:[.,]\d+)?)(?:\s+R(\d+))?$/i
+const NAME_RX = /^(\S+)\s+Brodzik\s+(\S+)\s+(\S+)\s+(.+?)\s+(\d+)\s*x\s*(\d+)\s*x\s*(\d+(?:[.,]\d+)?)(?:\s+R(\d+))?(?:\s+.*)?$/i
 const IMG_SHAPES = { kwadrat: 'kwadratowy', prostokat: 'prostokątny', polokragly: 'półokrągły', pieciokat: 'pięciokątny', asymetryczny: 'asymetryczny' }
 const IMG_COLORS = { smooth_white: 'smooth white', black_scale: 'black scale', white_scale: 'white scale', cement_scale: 'cement scale', grey_scale: 'grey scale', anthracite_scale: 'anthracite scale', cashmere_scale: 'cashmere scale' }
 const DRAWING = { kwadratowy: 'kwadrat', 'prostokątny': 'prostokąt', 'półokrągły': 'półokrągły', 'pięciokątny': 'pięciokąt', asymetryczny: 'asymetryczny' }
@@ -13,7 +13,7 @@ function ruleFor(rules, brandId, attribute, sku) {
   const [base, ...rest] = sku.split('/')
   const active = rules.filter(r => r.active !== false && (!r.brand_id || r.brand_id === brandId))
   // kody powłok (np. AP1) doklejone do końcówki nie przeszkadzają w rozpoznaniu koloru: B/SC/AP1 → B/SC
-  const coatings = new Set(active.filter(r => r.match_type === 'segment').map(r => r.pattern.toUpperCase()))
+  const coatings = new Set(active.filter(r => r.match_type === 'segment').map(r => r.pattern.toUpperCase()))   // powłoki, /NO itp.
   const suffix = rest.filter(seg => !coatings.has(seg.toUpperCase())).join('/')
   const list = active.filter(r => r.attribute === attribute)
   if (attribute === 'powloka') return list.find(r => r.match_type === 'segment' && rest.some(seg => seg.toUpperCase() === r.pattern.toUpperCase())) || null
@@ -115,13 +115,13 @@ export function parseProducts(raw, brands, rules, pim = new Map()) {
     let model = (m ? m[3] : null) || pr?.model || (pr ? (pr.category_path?.slice(-1)[0] || pr.category || null) : null)
     // zestaw (np. wanna z nośnikiem) → osobna rodzina „model + nośnik”; same nośniki są wyłączone
     const isCarrier = /^no[sś]nik/i.test(category || '') || /^(\S+\s+)?no[sś]nik/i.test(name)
-    // źródło prawdy o zestawie = rekord produktu w PIM (nie nazwa w Baselinkerze)
-    const setRules = !isCarrier && model ? rules.filter(r => r.active !== false && r.attribute === 'rodzina' && r.match_type === 'name' && (!r.brand_id || r.brand_id === brand?.id)) : []
-    const hit = txt => setRules.find(r => { try { return new RegExp(r.pattern, 'i').test(txt || '') } catch { return false } })
-    const famRule = pr ? hit(pr.name) : null
-    if (famRule) { model = `${model} + ${famRule.value}`; a.w_zestawie = famRule.value; flags.push(`Zestaw z: ${famRule.value} (wg PIM) – osobna rodzina „${model}”`) }
-    else if (!pr && hit(name)) flags.push(`Nazwa w Baselinkerze sugeruje zestaw z: ${hit(name).value}, ale SKU nie ma w PIM – rodzina zestawu nie została utworzona`)
-    else if (pr && hit(name)) flags.push(`Nazwa w Baselinkerze sugeruje zestaw z: ${hit(name).value}, a PIM nie – sprawdź opis produktu w PIM`)
+    // zestaw: najpierw fragment SKU (np. /NO), opcjonalnie aktywna reguła po opisie z PIM
+    const setRules = !isCarrier && model ? rules.filter(r => r.active !== false && r.attribute === 'rodzina' && (!r.brand_id || r.brand_id === brand?.id)) : []
+    const segs = sku.split('/').slice(1).map(x => x.toUpperCase())
+    const bySku = setRules.find(r => r.match_type === 'segment' && segs.includes(r.pattern.toUpperCase()))
+    const byName = !bySku && pr ? setRules.find(r => { if (r.match_type !== 'name') return false; try { return new RegExp(r.pattern, 'i').test(pr.name || '') } catch { return false } }) : null
+    const famRule = bySku || byName
+    if (famRule) { model = `${model} + ${famRule.value}`; a.w_zestawie = famRule.value; flags.push(`Zestaw z: ${famRule.value} (${bySku ? 'SKU /' + famRule.pattern : 'opis w PIM'}) – osobna rodzina „${model}”`) }
     return {
       sku, ean: clean(p.ean) || pr?.ean || '', name, image_url: images[0]?.url || null, images, bl_id: p.bl_id ? Number(p.bl_id) : null,
       brand_id: brand?.id || null, brand_name: brand?.name || brandName || null,

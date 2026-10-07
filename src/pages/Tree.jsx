@@ -149,16 +149,18 @@ export default function Tree() {
   async function load() {
     const fetchAll = async (table, cols) => { let out = [], from = 0; for (;;) { const { data, error } = await supabase.from(table).select(cols).range(from, from + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) return out; from += 1000 } }
     try {
-      const [as, pr, fam, ch, ds] = await Promise.all([
+      const [as, pr, fam, ch, ds, rl] = await Promise.all([
         fetchAll('assortment', 'sku, name, brand, category, category_path, model, color, shape, technology, source, issues, uploaded_at'), fetchAll('products', 'id, sku, name, family_id'),
         fetchAll('product_families', 'id, model_name'), supabase.from('channels').select('id, marketplace, language').eq('active', true),
         fetchAll('descriptions', 'id, channel_id, product_id, version, status'),
+        supabase.from('import_rules').select('pattern, value, match_type, active').eq('attribute', 'rodzina'),
       ])
       const order = { ro: 1, hu: 2, bg: 3 }
       const channels = (ch.data || []).sort((a, b) => (order[a.language] || 9) - (order[b.language] || 9))
       const latest = {}
       for (const x of ds.sort((a, b) => b.version - a.version)) { const k = `${x.channel_id}|${x.product_id}`; if (!latest[k]) latest[k] = x }
-      setD({ as, products: Object.fromEntries(pr.map(p => [p.sku, p])), fam: Object.fromEntries(fam.map(f => [f.id, f.model_name])), channels, latest })
+      const setRules = (rl.data || []).filter(r => r.active !== false && r.match_type === 'segment')
+      setD({ as, products: Object.fromEntries(pr.map(p => [p.sku, p])), fam: Object.fromEntries(fam.map(f => [f.id, f.model_name])), channels, latest, setRules })
       setChannel(c => c || channels[0]?.id || '')
     } catch (e) { setErr(plError(e.message)) }
   }
@@ -183,7 +185,11 @@ export default function Tree() {
       if (onlyMissing && sts[channel] === 'opublikowany') continue
       if (onlyIssues && !(r.issues || []).some(i => !rule || i.code === rule)) continue
       const cats = r.outside ? [] : (r.category_path?.length ? r.category_path : [r.category || '(bez kategorii)'])
-      const model = (p && d.fam[p.family_id]) || r.model || '(bez modelu)'
+      // ta sama reguła zestawów co przy imporcie (np. /NO → „Antis + nośnik”)
+      const segs = String(r.sku).split('/').slice(1).map(x => x.toUpperCase())
+      const set = d.setRules.find(x => segs.includes(String(x.pattern).toUpperCase()))
+      const pimModel = r.model ? (set ? `${r.model} + ${set.value}` : r.model) : null
+      const model = (p && d.fam[p.family_id]) || pimModel || '(bez modelu)'
       put([r.outside ? '—' : (r.brand || '(bez marki)'), ...cats, model], { ...r, p, sts, descId })
     }
     const flat = n => [...n.items, ...Object.values(n.children).flatMap(flat)]
