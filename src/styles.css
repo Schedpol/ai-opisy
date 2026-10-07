@@ -355,3 +355,7 @@ textarea.code, pre.code-view { font-family: ui-monospace, Menlo, Consolas, monos
 pre.code-view { background: #0D1B3E; color: #E8EEF9; padding: 16px; border-radius: var(--radius-m); white-space: pre-wrap; word-break: break-word; max-height: 80vh; overflow: auto; }
 .preview-tools { display: flex; justify-content: space-between; align-items: center; margin: 6px 0; }
 .fields-help code { background: var(--bg); padding: 1px 4px; border-radius: 4px; font-size: 12px; }
+.danger-link { color: var(--error, #B42318) !important; margin-left: 10px; }
+td.nowrap { white-space: nowrap; }
+.copy-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
+.copy-row label { text-align: left; }
