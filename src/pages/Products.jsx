@@ -5,7 +5,7 @@ import ImportPanel from '../components/ImportPanel.jsx'
 import { generateBase } from '../gen.js'
 
 const ATTRS = [['wymiar', 'Wymiar'], ['wysokosc_cm', 'Wys. cm'], ['ksztalt', 'Kształt'], ['wykonczenie', 'Wykończenie'], ['powloka', 'Powłoka'], ['odplyw', 'Odpływ']]
-const minor = f => f.startsWith('Nazwa identyczna') || f === 'Waga = 0' || f.startsWith('Podwójne') || f.startsWith('Kształt z reguły')
+const minor = f => f.startsWith('Nazwa identyczna') || f === 'Waga = 0' || f.startsWith('Podwójne') || f.startsWith('Kształt z reguły') || f.startsWith('Odpływ odczytany')
 
 const fmt = v => v == null ? '—' : typeof v === 'number' ? v.toLocaleString('pl-PL') : v
 

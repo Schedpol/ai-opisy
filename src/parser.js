@@ -84,9 +84,19 @@ export function parseProducts(raw, brands, rules, pim = new Map()) {
         || imgRules.find(r => r.match_type === 'position' && Number(r.pattern) === i + 1)
       return { url, position: i + 1, role: rule ? rule.value : null }
     })
+    // brak reguły odpływu dla prostokąta → odpływ odczytany z packshotu (konwencja zdjęć jest źródłem prawdy)
+    const PACK_TO_DRAIN = { 'packshot – odpływ w narożniku': 'odpływ w narożniku', 'packshot – odpływ na środku boku': 'odpływ na środku boku', 'packshot – odpływ na krótkim boku': 'odpływ przy krótszym boku' }
+    const mainPack = images.find(im => im.role && im.role.startsWith('packshot'))
+    if (!a.odplyw && a.ksztalt === 'prostokątny' && mainPack && PACK_TO_DRAIN[mainPack.role]) {
+      a.odplyw = PACK_TO_DRAIN[mainPack.role]
+      flags.push(`Odpływ odczytany ze zdjęcia: ${a.odplyw}`)
+    }
     // który packshot i który rysunek pasuje do tego wariantu (konwencja ścieżek zdjęć)
     const odplywRules = imgRules.filter(r => r.match_type === 'odplyw')
-    const wantPack = a.odplyw ? odplywRules.find(r => r.pattern && a.odplyw.toLowerCase().includes(r.pattern.toLowerCase()))?.value : odplywRules.find(r => r.pattern === '')?.value
+    const DRAIN_TO_PACK = { 'w narożniku': 'packshot – odpływ w narożniku', 'na środku boku': 'packshot – odpływ na środku boku', 'krótszym boku': 'packshot – odpływ na krótkim boku' }
+    const wantPack = a.odplyw
+      ? (odplywRules.find(r => r.pattern && a.odplyw.toLowerCase().includes(r.pattern.toLowerCase()))?.value || Object.entries(DRAIN_TO_PACK).find(([k]) => a.odplyw.includes(k))?.[1])
+      : odplywRules.find(r => r.pattern === '')?.value
     const wantDraw = DRAWING[a.ksztalt] ? `rysunek techniczny – ${DRAWING[a.ksztalt]}` : null
     images.forEach(im => { im.preferred = !!im.role && (im.role === wantPack || im.role === wantDraw) })
     const main = images[0]

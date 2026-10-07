@@ -87,7 +87,7 @@ export default function ImportPanel({ brands, rules, existingSkus, onSaved, onCl
 
   const total = preview?.parsed.length || 0
   const isNew = preview ? preview.parsed.filter(p => !existingSkus.has(p.sku)).length : 0
-  const flagged = preview ? preview.parsed.filter(p => p.flags.some(f => !f.startsWith('Nazwa identyczna') && f !== 'Waga = 0' && !f.startsWith('Podwójne') && !f.startsWith('Kształt z reguły'))).length : 0
+  const flagged = preview ? preview.parsed.filter(p => p.flags.some(f => !f.startsWith('Nazwa identyczna') && f !== 'Waga = 0' && !f.startsWith('Podwójne') && !f.startsWith('Kształt z reguły') && !f.startsWith('Odpływ odczytany'))).length : 0
 
   return (
     <div className="panel">
