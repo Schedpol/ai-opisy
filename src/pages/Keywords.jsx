@@ -2,9 +2,10 @@ import { useEffect, useState } from 'react'
 import { supabase, plError } from '../supabase.js'
 import { runJob } from '../jobs.js'
 
-const LANG = { ro: 'rumuński (eMAG RO)', hu: 'węgierski (eMAG HU)', bg: 'bułgarski (eMAG BG)' }
+import { LANGS } from '../languages.js'
+const LANG = Object.fromEntries(Object.entries(LANGS).map(([k, v]) => [k, `${v.name} (${v.country})`]))
 
-const LOCATION = { ro: 2642, hu: 2348, bg: 2100 }
+const LOCATION = Object.fromEntries(Object.entries(LANGS).map(([k, v]) => [k, v.location]))
 
 function AddBank({ categories, existing, onAdded }) {
   const [f, setF] = useState({ category: '', language: 'ro', seeds: '' })
@@ -54,6 +55,7 @@ function Bank({ bank, onChanged, canVerify }) {
     if (!error) onChanged()
   }
   async function refresh() {
+    if (!(bank.seeds || []).length) { setMsg({ type: 'error', text: 'Bank nie ma fraz startowych. Wpisz je (w języku rynku) i zapisz, potem odśwież.' }); return }
     if (!bank.seeds_verified && !confirm('Frazy startowe tego banku nie zostały jeszcze sprawdzone przez osobę znającą język. Odświeżyć mimo to?')) return
     setMsg(null); setStage('DataForSEO pobiera wolumeny wyszukiwań…')
     try {

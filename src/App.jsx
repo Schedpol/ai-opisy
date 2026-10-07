@@ -68,9 +68,9 @@ export default function App() {
           <Route path="weryfikacja/:id" element={<Review profile={profile} />} />
           <Route path="biblioteka" element={<Library profile={profile} />} />
           <Route path="publikacja" element={<Publish profile={profile} />} />
-          <Route path="ustawienia" element={profile?.role === 'admin' ? <Settings /> : <Navigate to="/" />} />
+          <Route path="ustawienia" element={!profile ? null : profile.role === 'admin' ? <Settings /> : <Navigate to="/" />} />
           <Route path="reguly" element={<QaRules profile={profile} />} />
-          <Route path="uzytkownicy" element={profile?.role === 'admin' ? <Users /> : <Navigate to="/" />} />
+          <Route path="uzytkownicy" element={!profile ? null : profile.role === 'admin' ? <Users /> : <Navigate to="/" />} />
           <Route path="konto" element={<Account profile={profile} />} />
           <Route path="*" element={<Navigate to="/" />} />
         </Route>

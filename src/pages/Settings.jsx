@@ -1,6 +1,90 @@
 import { useEffect, useState } from 'react'
 import { supabase, plError } from '../supabase.js'
 import { runJob, PUBLISH_URL } from '../jobs.js'
+import { LANGS, BASE_FORBIDDEN } from '../languages.js'
+
+const plN = (n, one, few, many) => `${n} ${n === 1 ? one : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? few : many}`
+const MARKETPLACES = ['eMAG', 'Kaufland', 'Allegro', 'Amazon', 'Empik', 'Cdiscount']
+const codeOf = (mp, lang) => `${mp.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '')}_${lang}`
+
+function AddChannel({ channels, onAdded }) {
+  const empty = { marketplace: '', language: 'de', code: '', src: '', bl_lang: '', desc_field: 'description', title_max: 200, active: true, copy_from: '', banks: true, qa: true }
+  const [f, setF] = useState(empty)
+  const [busy, setBusy] = useState(false)
+  const [log, setLog] = useState(null)
+  const set = patch => setF(x => { const n = { ...x, ...patch }; if ('marketplace' in patch || 'language' in patch) n.code = codeOf(n.marketplace || '', n.language); return n })
+  const isAmazon = /amazon/i.test(f.marketplace)
+  const dup = channels.find(c => c.marketplace.toLowerCase() === f.marketplace.trim().toLowerCase() && c.language === f.language)
+  const source = channels.find(c => c.id === f.copy_from) || channels.find(c => c.code === 'emag_ro') || channels[0]
+
+  async function add(e) {
+    e.preventDefault(); if (dup || !f.marketplace.trim()) return
+    setBusy(true); const steps = []
+    try {
+      // 1) kanał
+      const { data: ch, error } = await supabase.from('channels').insert({
+        code: f.code.trim() || codeOf(f.marketplace, f.language), marketplace: f.marketplace.trim(), language: f.language,
+        baselinker_source_id: f.src.trim() || null, bl_text_lang: f.bl_lang.trim() || null, bl_desc_field: f.desc_field.trim() || 'description', bl_name_field: 'name',
+        limits: { ...(source?.limits || {}), title_max: Number(f.title_max) || 200 }, active: isAmazon ? false : f.active,
+      }).select().single()
+      if (error) throw error
+      steps.push(`Kanał ${ch.marketplace} ${ch.language.toUpperCase()} utworzony${isAmazon ? ' jako nieaktywny (Amazon wymaga osobnego formatu opisu)' : ''}.`)
+      // 2) szablony skopiowane z rynku źródłowego
+      if (source) {
+        const { data: tpls } = await supabase.from('templates').select('*').eq('channel_id', source.id).eq('status', 'aktywny')
+        const label = `${ch.marketplace} ${ch.language.toUpperCase()}`
+        const rows = (tpls || []).map(t => ({ channel_id: ch.id, brand_id: t.brand_id, category: t.category, sections: t.sections, styles: t.styles, version: 1, status: 'aktywny',
+          name: t.name.replace(`${source.marketplace} ${source.language.toUpperCase()}`, label) }))
+        if (rows.length) { const r = await supabase.from('templates').insert(rows); if (r.error) throw r.error }
+        steps.push(rows.length ? `Skopiowano ${plN(rows.length, 'szablon', 'szablony', 'szablonów')} z ${source.marketplace} ${source.language.toUpperCase()} (domyślny${rows.some(r => r.category) ? ' + kategorie' : ''}).` : `Rynek ${source.marketplace} ${source.language.toUpperCase()} nie ma szablonów do skopiowania.`)
+      }
+      // 3) banki fraz dla wszystkich kategorii w nowym języku (puste frazy startowe – do uzupełnienia w języku rynku)
+      if (f.banks) {
+        const [{ data: banks }, { data: fams }] = await Promise.all([supabase.from('keyword_banks').select('category, language'), supabase.from('product_families').select('category')])
+        const cats = [...new Set([...(banks || []).map(b => b.category), ...(fams || []).map(x => x.category)].filter(Boolean))]
+        const todo = cats.filter(c => !(banks || []).some(b => b.category === c && b.language === f.language))
+        if (todo.length) { const r = await supabase.from('keyword_banks').insert(todo.map(category => ({ category, language: f.language, location_code: LANGS[f.language].location, seeds: [] }))); if (r.error) throw r.error }
+        steps.push(todo.length ? `Założono ${plN(todo.length, 'bank', 'banki', 'banków')} fraz (${LANGS[f.language].name}): ${todo.join(', ')}. Frazy startowe są puste – uzupełnij je w zakładce Frazy kluczowe.` : `Banki fraz w języku „${LANGS[f.language].name}” już istnieją.`)
+      }
+      // 4) podstawowe reguły QA dla języka
+      if (f.qa && BASE_FORBIDDEN[f.language]) {
+        const { data: existing } = await supabase.from('qa_rules').select('pattern').eq('language', f.language)
+        const add = BASE_FORBIDDEN[f.language].filter(p => !(existing || []).some(x => x.pattern.toLowerCase() === p.toLowerCase()))
+        if (add.length) { const r = await supabase.from('qa_rules').insert(add.map(pattern => ({ rule_type: 'zakazany_wzorzec', pattern, language: f.language, status: 'aktywna' }))); if (r.error) throw r.error }
+        steps.push(add.length ? `Dodano ${plN(add.length, 'zakazane sformułowanie', 'zakazane sformułowania', 'zakazanych sformułowań')} QA (${f.language.toUpperCase()}) – do przejrzenia w Regułach QA.` : 'Reguły QA dla tego języka już istnieją.')
+      }
+      setLog({ type: 'ok', steps }); setF(empty); onAdded()
+    } catch (err) { setLog({ type: 'error', steps: [...steps, plError(err.message)] }) } finally { setBusy(false) }
+  }
+
+  return (
+    <details className="panel">
+      <summary><strong>Dodaj kanał</strong> <span className="muted small">nowy marketplace albo nowy rynek istniejącego</span></summary>
+      <form onSubmit={add}>
+        <div className="grid-form">
+          <label>Kanał sprzedaży<input list="mp-list" value={f.marketplace} onChange={e => set({ marketplace: e.target.value })} placeholder="np. Kaufland" required /></label>
+          <label>Rynek / język<select value={f.language} onChange={e => set({ language: e.target.value })}>{Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v.country} ({v.name})</option>)}</select></label>
+          <label>Kod kanału<input value={f.code} onChange={e => setF({ ...f, code: e.target.value })} placeholder="np. kaufland_de" /></label>
+          <label>ID integracji w Baselinkerze<input list="integ-list" value={f.src} onChange={e => setF({ ...f, src: e.target.value })} placeholder="np. kaufland_42893 (można później)" /></label>
+          <label>Język klucza Baselinkera<input value={f.bl_lang} onChange={e => setF({ ...f, bl_lang: e.target.value })} placeholder={`puste = ${f.language}`} /></label>
+          <label>Pole opisu<input value={f.desc_field} onChange={e => setF({ ...f, desc_field: e.target.value })} /></label>
+          <label>Limit tytułu (znaki)<input type="number" min="40" max="500" value={f.title_max} onChange={e => setF({ ...f, title_max: e.target.value })} /></label>
+          <label>Szablony skopiuj z<select value={f.copy_from || source?.id || ''} onChange={e => setF({ ...f, copy_from: e.target.value })}>{channels.map(c => <option key={c.id} value={c.id}>{c.marketplace} {c.language.toUpperCase()}</option>)}</select></label>
+        </div>
+        <label className="check"><input type="checkbox" checked={f.banks} onChange={e => setF({ ...f, banks: e.target.checked })} /> załóż banki fraz dla wszystkich kategorii w tym języku</label>
+        {BASE_FORBIDDEN[f.language] && <label className="check"><input type="checkbox" checked={f.qa} onChange={e => setF({ ...f, qa: e.target.checked })} /> dodaj podstawowe zakazane sformułowania QA ({BASE_FORBIDDEN[f.language].slice(0, 3).join(', ')}…)</label>}
+        <label className="check"><input type="checkbox" checked={isAmazon ? false : f.active} disabled={isAmazon} onChange={e => setF({ ...f, active: e.target.checked })} /> kanał aktywny</label>
+        {isAmazon && <p className="hint">Amazon nie przyjmuje w opisie bogatego HTML ani obrazków, a kluczowe są punkty w osobnych polach. Kanał zostanie utworzony jako nieaktywny, dopóki nie przygotujemy dla niego osobnego formatu opisu.</p>}
+        {dup && <p className="error">Kanał {dup.marketplace} {dup.language.toUpperCase()} już istnieje.</p>}
+        <p className="muted small">Dostępne języki to te, które obsługuje generacja w n8n. Inny język wymaga dopisania go w workflow – daj znać.</p>
+        <button className="btn" disabled={busy || !!dup || !f.marketplace.trim()}>{busy ? 'Tworzenie…' : 'Dodaj kanał'}</button>
+        <datalist id="mp-list">{[...new Set([...channels.map(c => c.marketplace), ...MARKETPLACES])].map(m => <option key={m} value={m} />)}</datalist>
+        {log && <ul className={log.type === 'ok' ? 'ok steps' : 'error steps'} role="status">{log.steps.map((x, i) => <li key={i}>{x}</li>)}</ul>}
+      </form>
+    </details>
+  )
+}
+
 
 export default function Settings() {
   const [channels, setChannels] = useState([])
@@ -83,6 +167,7 @@ export default function Settings() {
         <datalist id="integ-list">{(integ || []).map(i => <option key={i.source_id} value={i.source_id}>{i.name}</option>)}</datalist>
         {msg && <p className={msg.type} role="status">{msg.text}</p>}
       </div>
+      <AddChannel channels={channels} onAdded={load} />
     </section>
   )
 }

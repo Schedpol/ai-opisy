@@ -350,3 +350,4 @@ tr.inactive-row td { color: var(--ink-soft); }
 table.compact.cat-table td { white-space: normal; }
 table.compact.cat-table td.actions { white-space: nowrap; width: 1%; text-align: right; }
 table.compact.cat-table td.mono { width: 1%; }
+ul.steps { margin: 12px 0 0; padding-left: 20px; } ul.steps li { margin: 4px 0; }
