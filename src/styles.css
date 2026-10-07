@@ -360,3 +360,7 @@ td.nowrap { white-space: nowrap; }
 .copy-row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; justify-content: center; margin-top: 8px; }
 .copy-row label { text-align: left; }
 .copy-row.left { justify-content: flex-start; }
+tr.sub-row td { padding-top: 0; border-top: none; }
+.inline-label { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-soft); }
+.inline-label input { flex: 1; }
+.lang-filter { flex-wrap: wrap; margin: 6px 0 12px; }

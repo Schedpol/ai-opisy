@@ -1,16 +1,17 @@
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 import { supabase, plError } from '../supabase.js'
 import { runJob, PUBLISH_URL } from '../jobs.js'
-import { LANGS, BASE_FORBIDDEN } from '../languages.js'
+import { LANGS, BASE_FORBIDDEN, DEFAULT_TITLE_PATTERN, titlePresetFor } from '../languages.js'
 import { copyTemplates, deleteChannel, createBlankTemplates, activeBrands } from '../channels.js'
 import { OUTPUT_PRESETS } from '../render.js'
 
 const plN = (n, one, few, many) => `${n} ${n === 1 ? one : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? few : many}`
 const MARKETPLACES = ['eMAG', 'Kaufland', 'Allegro', 'Amazon', 'Empik', 'Cdiscount']
+const escapeRx = t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const codeOf = (mp, lang) => `${mp.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '')}_${lang}`
 
 function AddChannel({ channels, onAdded }) {
-  const empty = { marketplace: '', language: 'de', code: '', src: '', bl_lang: '', desc_field: 'description', title_max: 200, active: true, copy_from: '', format: '', banks: true, qa: true }
+  const empty = { marketplace: '', language: 'de', code: '', src: '', bl_lang: '', desc_field: 'description', title_max: 200, title_pattern: '', active: true, copy_from: '', format: '', banks: true, qa: true }
   const [f, setF] = useState(empty)
   const [busy, setBusy] = useState(false)
   const [log, setLog] = useState(null)
@@ -22,7 +23,11 @@ function AddChannel({ channels, onAdded }) {
   const tplMode = f.copy_from || (sameMp ? sameMp.id : 'blank')
   const source = tplMode !== 'blank' && tplMode !== 'none' ? channels.find(c => c.id === tplMode) : null
   // podpowiedź formatu: Kaufland → prosty HTML
-  useEffect(() => { if (/kaufland/i.test(f.marketplace) && !f.format) setF(x => ({ ...x, format: 'kaufland' })) }, [f.marketplace])
+  useEffect(() => {
+    if (/kaufland/i.test(f.marketplace) && !f.format) setF(x => ({ ...x, format: 'kaufland' }))
+    const tp = titlePresetFor(f.marketplace)
+    if (tp) setF(x => ({ ...x, title_pattern: x.title_pattern || tp.pattern, title_max: x.title_max === 200 ? tp.max : x.title_max }))
+  }, [f.marketplace])
 
   async function add(e) {
     e.preventDefault(); if (dup || !f.marketplace.trim()) return
@@ -32,7 +37,7 @@ function AddChannel({ channels, onAdded }) {
       const { data: ch, error } = await supabase.from('channels').insert({
         code: f.code.trim() || codeOf(f.marketplace, f.language), marketplace: f.marketplace.trim(), language: f.language,
         baselinker_source_id: f.src.trim() || null, bl_text_lang: f.bl_lang.trim() || null, bl_desc_field: f.desc_field.trim() || 'description', bl_name_field: 'name',
-        limits: { ...(source?.limits || {}), title_max: Number(f.title_max) || 200 }, active: isAmazon ? false : f.active,
+        limits: { ...(source?.limits || {}), title_max: Number(f.title_max) || 200, title_pattern: f.title_pattern.trim() || DEFAULT_TITLE_PATTERN }, active: isAmazon ? false : f.active,
       }).select().single()
       if (error) throw error
       steps.push(`Kanał ${ch.marketplace} ${ch.language.toUpperCase()} utworzony${isAmazon ? ' jako nieaktywny (Amazon wymaga osobnego formatu opisu)' : ''}.`)
@@ -59,7 +64,7 @@ function AddChannel({ channels, onAdded }) {
       // 4) podstawowe reguły QA dla języka
       if (f.qa && BASE_FORBIDDEN[f.language]) {
         const { data: existing } = await supabase.from('qa_rules').select('pattern').eq('language', f.language)
-        const add = BASE_FORBIDDEN[f.language].filter(p => !(existing || []).some(x => x.pattern.toLowerCase() === p.toLowerCase()))
+        const add = BASE_FORBIDDEN[f.language].map(escapeRx).filter(p => !(existing || []).some(x => x.pattern.toLowerCase() === p.toLowerCase()))
         if (add.length) { const r = await supabase.from('qa_rules').insert(add.map(pattern => ({ rule_type: 'zakazany_wzorzec', pattern, language: f.language, status: 'aktywna' }))); if (r.error) throw r.error }
         steps.push(add.length ? `Dodano ${plN(add.length, 'zakazane sformułowanie', 'zakazane sformułowania', 'zakazanych sformułowań')} QA (${f.language.toUpperCase()}) – do przejrzenia w Regułach QA.` : 'Reguły QA dla tego języka już istnieją.')
       }
@@ -79,6 +84,7 @@ function AddChannel({ channels, onAdded }) {
           <label>Język klucza Baselinkera<input value={f.bl_lang} onChange={e => setF({ ...f, bl_lang: e.target.value })} placeholder={`puste = ${f.language}`} /></label>
           <label>Pole opisu<input value={f.desc_field} onChange={e => setF({ ...f, desc_field: e.target.value })} /></label>
           <label>Limit tytułu (znaki)<input type="number" min="40" max="500" value={f.title_max} onChange={e => setF({ ...f, title_max: e.target.value })} /></label>
+          <label className="span-all">Wzorzec tytułu (instrukcja dla AI)<input value={f.title_pattern} onChange={e => setF({ ...f, title_pattern: e.target.value })} placeholder={DEFAULT_TITLE_PATTERN} /></label>
           <label>Szablony<select value={tplMode} onChange={e => setF({ ...f, copy_from: e.target.value })}>
             <option value="blank">nowy szablon od zera</option>
             {channels.map(c => <option key={c.id} value={c.id}>skopiuj z {c.marketplace} {c.language.toUpperCase()}</option>)}
@@ -110,7 +116,7 @@ export default function Settings() {
 
   async function load() {
     const { data } = await supabase.from('channels').select('*').order('code')
-    setChannels(data || []); setEdit(Object.fromEntries((data || []).map(c => [c.id, { src: c.baselinker_source_id || '', active: c.active, title_max: c.limits?.title_max ?? 200,
+    setChannels(data || []); setEdit(Object.fromEntries((data || []).map(c => [c.id, { src: c.baselinker_source_id || '', active: c.active, title_max: c.limits?.title_max ?? 200, title_pattern: c.limits?.title_pattern || '',
       lang: c.bl_text_lang || '', desc: c.bl_desc_field || 'description', name: c.bl_name_field || 'name' }])))
   }
   useEffect(() => { load() }, [])
@@ -139,7 +145,7 @@ export default function Settings() {
     }
     if (e.lang.trim() && !/^[a-z]{2}$/.test(e.lang.trim())) { setMsg({ type: 'error', text: 'Język klucza to dwie małe litery, np. ro albo bg.' }); return }
     setBusy(c.id); setMsg(null)
-    const { error } = await supabase.from('channels').update({ baselinker_source_id: e.src.trim() || null, active: e.active, limits: { ...(c.limits || {}), title_max: Number(e.title_max) || 200 },
+    const { error } = await supabase.from('channels').update({ baselinker_source_id: e.src.trim() || null, active: e.active, limits: { ...(c.limits || {}), title_max: Number(e.title_max) || 200, title_pattern: (e.title_pattern || '').trim() || null },
       bl_text_lang: e.lang.trim() || null, bl_desc_field: e.desc.trim() || 'description', bl_name_field: e.name.trim() || 'name' }).eq('id', c.id)
     setMsg(error ? { type: 'error', text: plError(error.message) } : { type: 'ok', text: `Zapisano ${c.marketplace} ${c.language.toUpperCase()}.` })
     setBusy(''); if (!error) load()
@@ -168,11 +174,11 @@ export default function Settings() {
             <tbody>
               {channels.map(c => {
                 const e = edit[c.id] || {}
-                const dirty = e.src !== (c.baselinker_source_id || '') || e.active !== c.active || Number(e.title_max) !== (c.limits?.title_max ?? 200)
+                const dirty = e.src !== (c.baselinker_source_id || '') || e.active !== c.active || Number(e.title_max) !== (c.limits?.title_max ?? 200) || (e.title_pattern || '') !== (c.limits?.title_pattern || '')
                   || e.lang !== (c.bl_text_lang || '') || e.desc !== (c.bl_desc_field || 'description') || e.name !== (c.bl_name_field || 'name')
                 const key = `${e.desc || 'description'}|${e.lang || c.language}|${e.src || '…'}`
                 return (
-                  <tr key={c.id}>
+                  <Fragment key={c.id}><tr>
                     <td><strong>{c.marketplace} {c.language.toUpperCase()}</strong></td>
                     <td><input value={e.src || ''} placeholder="np. emagro_42894" list="integ-list" onChange={ev => setEdit({ ...edit, [c.id]: { ...e, src: ev.target.value } })} />
                       <span className="muted small key-preview">{key}</span></td>
@@ -184,6 +190,9 @@ export default function Settings() {
                     <td className="nowrap"><button className="btn ghost small-btn" disabled={!dirty || busy === c.id} onClick={() => save(c)}>Zapisz</button>
                       <button className="link-dark danger-link" disabled={busy === c.id} onClick={() => remove(c)} title="Usuń kanał">Usuń</button></td>
                   </tr>
+                  <tr className="sub-row"><td colSpan={8}>
+                    <label className="inline-label">Wzorzec tytułu<input value={e.title_pattern || ''} placeholder={`domyślny: ${titlePresetFor(c.marketplace)?.pattern || DEFAULT_TITLE_PATTERN}`} onChange={ev => setEdit({ ...edit, [c.id]: { ...e, title_pattern: ev.target.value } })} /></label>
+                  </td></tr></Fragment>
                 )
               })}
             </tbody>

@@ -1,13 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase, plError } from '../supabase.js'
+import { LANGS as ALL_LANGS, BASE_FORBIDDEN } from '../languages.js'
 
 const TYPES = {
   zakazany_wzorzec: { label: 'Zakazane sformułowanie', hint: 'QA blokuje akceptację opisu, który je zawiera.' },
   marka_konkurencji: { label: 'Marka konkurencji', hint: 'QA blokuje opis z tą nazwą.' },
   instrukcja: { label: 'Zasada redakcyjna dla AI', hint: 'Trafia do promptu przy każdej generacji opisu i wariantu.' },
 }
-const LANGS = { '': 'wszystkie języki', ro: 'RO', hu: 'HU', bg: 'BG' }
+const langLabel = code => !code ? 'wszystkie języki' : `${code.toUpperCase()}${ALL_LANGS[code] ? ` – ${ALL_LANGS[code].name}` : ''}`
 const escapeRx = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 const plural = (n, a, b, c) => n === 1 ? a : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? b : c
 
@@ -17,12 +18,16 @@ export default function QaRules({ profile }) {
   const [f, setF] = useState({ rule_type: 'zakazany_wzorzec', text: '', regex: false, language: '' })
   const [test, setTest] = useState('')
   const [msg, setMsg] = useState(null)
+  const [chLangs, setChLangs] = useState([])
+  const [langFilter, setLangFilter] = useState('')
   const admin = profile?.role === 'admin'
 
   async function load() {
     const { data, error } = await supabase.from('qa_rules').select('*').order('created_at', { ascending: false })
     if (error) { setMsg({ type: 'error', text: plError(error.message) }); return }
     setRules(data)
+    const ch = await supabase.from('channels').select('language')
+    setChLangs([...new Set((ch.data || []).map(c => c.language))])
     const ids = data.map(r => r.source_comment_id).filter(Boolean)
     if (ids.length) {
       const c = await supabase.from('review_comments').select('id, description_id, section_key').in('id', ids)
@@ -56,6 +61,16 @@ export default function QaRules({ profile }) {
   const hits = test.trim() ? active.filter(r => { try { return new RegExp(r.pattern, 'i').test(test) } catch { return false } }) : []
   const shown = r => r.rule_type === 'instrukcja' ? r.pattern : r.pattern.replace(/\\([.*+?^${}()|[\]\\])/g, '$1')
 
+  const langs = [...new Set([...Object.keys(ALL_LANGS), ...chLangs, ...(rules || []).map(r => r.language).filter(Boolean)])]
+  const missingBase = chLangs.filter(l => BASE_FORBIDDEN[l] && !(rules || []).some(r => r.language === l && r.rule_type === 'zakazany_wzorzec'))
+  async function addBase(lang) {
+    const { data: { session } } = await supabase.auth.getSession()
+    const rows = BASE_FORBIDDEN[lang].map(t => ({ rule_type: 'zakazany_wzorzec', pattern: escapeRx(t), language: lang, status: 'aktywna', created_by: session.user.id, approved_by: session.user.id }))
+    const { error } = await supabase.from('qa_rules').insert(rows)
+    setMsg(error ? { type: 'error', text: plError(error.message) } : { type: 'ok', text: `Dodano ${rows.length} podstawowych zakazów dla ${lang.toUpperCase()}.` })
+    if (!error) load()
+  }
+
   return (
     <section className="page">
       <h1>Reguły QA</h1>
@@ -67,7 +82,7 @@ export default function QaRules({ profile }) {
           <label>Typ<select value={f.rule_type} onChange={e => setF({ ...f, rule_type: e.target.value })}>
             {Object.entries(TYPES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}</select></label>
           <label>Język<select value={f.language} onChange={e => setF({ ...f, language: e.target.value })}>
-            {Object.entries(LANGS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+            {['', ...langs].map(k => <option key={k} value={k}>{langLabel(k)}</option>)}</select></label>
         </div>
         <label>{f.rule_type === 'instrukcja' ? 'Treść zasady (jedno zdanie, po polsku – AI zastosuje ją w każdym języku)' : f.rule_type === 'marka_konkurencji' ? 'Nazwa marki' : 'Sformułowanie'}
           {f.rule_type === 'instrukcja'
@@ -88,8 +103,17 @@ export default function QaRules({ profile }) {
         {test.trim() && (hits.length ? <p className="error">Zablokowałyby: {hits.map(r => `„${shown(r)}”`).join(', ')}</p> : <p className="ok">Żaden aktywny zakaz nie pasuje.</p>)}
       </div>
 
+      {admin && missingBase.map(l => (
+        <div key={l} className="hint">Kanał w języku {l.toUpperCase()} nie ma jeszcze zakazanych sformułowań. <button className="link-dark" onClick={() => addBase(l)}>Dodaj podstawowe ({BASE_FORBIDDEN[l].slice(0, 3).join(', ')}…)</button></div>
+      ))}
+      <div className="seg lang-filter">
+        <button className={!langFilter ? 'seg-btn on' : 'seg-btn'} onClick={() => setLangFilter('')}>Wszystkie</button>
+        {langs.filter(l => (rules || []).some(r => r.language === l) || chLangs.includes(l)).map(l => <button key={l} className={langFilter === l ? 'seg-btn on' : 'seg-btn'} onClick={() => setLangFilter(l)}>{l.toUpperCase()}</button>)}
+        <button className={langFilter === '_all' ? 'seg-btn on' : 'seg-btn'} onClick={() => setLangFilter('_all')}>dla wszystkich języków</button>
+      </div>
+      {langFilter && langFilter !== '_all' && <p className="muted small">Pokazane reguły języka {langFilter.toUpperCase()} oraz reguły dla wszystkich języków – razem obowiązują przy opisach w tym języku.</p>}
       {groups.map(([st, title]) => {
-        const list = rules.filter(r => r.status === st && r.rule_type !== 'limit')
+        const list = rules.filter(r => r.status === st && r.rule_type !== 'limit' && (!langFilter || (langFilter === '_all' ? !r.language : (r.language === langFilter || !r.language))))
         if (!list.length && st !== 'aktywna') return null
         return (
           <div key={st} className="panel">
@@ -105,7 +129,7 @@ export default function QaRules({ profile }) {
                       <td className="rule-text">{admin && r.rule_type === 'instrukcja'
                         ? <textarea rows={2} defaultValue={r.pattern} onBlur={e => edit(r, e.target.value)} aria-label="Treść zasady" />
                         : shown(r)}</td>
-                      <td>{LANGS[r.language || '']}</td>
+                      <td>{r.language ? r.language.toUpperCase() : 'wszystkie'}</td>
                       <td className="muted small">{c ? <Link to={`/weryfikacja/${c.description_id}`}>uwaga w Weryfikacji{c.section_key ? ` (${c.section_key})` : ''}</Link> : 'dodana ręcznie'}</td>
                       {admin && <td className="actions">
                         {st !== 'aktywna' && <button className="link-dark" onClick={() => setStatus(r, 'aktywna')}>Zatwierdź</button>}

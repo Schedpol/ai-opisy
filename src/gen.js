@@ -2,6 +2,7 @@ import { supabase } from './supabase.js'
 import { applies } from './knowledge.js'
 import { resolveImages } from './render.js'
 import { runJob, startJob } from './jobs.js'
+import { DEFAULT_TITLE_PATTERN, titlePresetFor } from './languages.js'
 
 const MARKET = c => `${c.marketplace} ${c.language.toUpperCase()}`
 
@@ -47,7 +48,7 @@ function payloadFrom(ctx, extra) {
     template: { sections, styles: ctx.template.styles },
     images: resolveImages(ctx.template, { brand_id: ctx.family.brand_id, family: ctx.family, product: ctx.product, library: ctx.library }),
     limits: ctx.channel.limits || {}, forbidden: ctx.forbidden, instructions: ctx.instructions,
-    title_pattern: '[typ produktu] [marka] [model], [wymiary] cm, [materiał], [kolor/wykończenie] – zgodnie ze standardem nazw eMAG',
+    title_pattern: (ctx.channel.limits || {}).title_pattern || titlePresetFor(ctx.channel.marketplace)?.pattern || DEFAULT_TITLE_PATTERN,
     ...extra,
   }
 }
