@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import ImportPanel from '../components/ImportPanel.jsx'
 import { generateBase } from '../gen.js'
 
-const ATTRS = [['wymiar', 'Wymiar'], ['wysokosc_cm', 'Wys. cm'], ['ksztalt', 'Kształt'], ['wykonczenie', 'Wykończenie'], ['odplyw', 'Odpływ']]
+const ATTRS = [['wymiar', 'Wymiar'], ['wysokosc_cm', 'Wys. cm'], ['ksztalt', 'Kształt'], ['wykonczenie', 'Wykończenie'], ['powloka', 'Powłoka'], ['odplyw', 'Odpływ']]
 const minor = f => f.startsWith('Nazwa identyczna') || f === 'Waga = 0' || f.startsWith('Podwójne') || f.startsWith('Kształt z reguły')
 
 const fmt = v => v == null ? '—' : typeof v === 'number' ? v.toLocaleString('pl-PL') : v

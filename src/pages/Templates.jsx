@@ -181,7 +181,7 @@ export default function Templates({ profile }) {
           <div className="tpl-preview">
             <div className="preview-label">Podgląd z przykładową treścią</div>
             <datalist id="roles-lib">{[...new Set(['baner', ...library.map(m => m.role)])].map(r => <option key={r} value={r} />)}</datalist>
-            <datalist id="roles-prod">{[...new Set(['packshot', 'aranżacja', 'rysunek techniczny', ...prodRoles])].map(r => <option key={r} value={r} />)}</datalist>
+            <datalist id="roles-prod">{[...new Set(['packshot', 'rysunek techniczny', 'aranżacja 1', 'aranżacja 2', 'infografika', ...prodRoles])].map(r => <option key={r} value={r} />)}</datalist>
             <div className="preview-frame" dangerouslySetInnerHTML={{ __html: preview }} />
           </div>
         </div>

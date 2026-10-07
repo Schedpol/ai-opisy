@@ -71,8 +71,13 @@ export function resolveImages(template, { brand_id, family = {}, product = {}, l
     if (src === 'none') continue
     if (src === 'static') { if (sec.image_url) out[sec.key] = sec.image_url; continue }
     if (src === 'product') {
-      const imgs = product.images || []
-      const hit = sec.image_role ? imgs.find(i => eq(i.role, sec.image_role)) : [...imgs].sort((a, b) => a.position - b.position)[0]
+      const imgs = [...(product.images || [])].sort((a, b) => a.position - b.position)
+      const role = String(sec.image_role || '').trim().toLowerCase()
+      // role ogólne: właściwy packshot (wg odpływu) i rysunek (wg kształtu) wybrane przy imporcie
+      const hit = !role ? imgs[0]
+        : role === 'packshot' ? (imgs.find(i => i.preferred && String(i.role).startsWith('packshot')) || imgs.find(i => String(i.role || '').startsWith('packshot')))
+        : role === 'rysunek techniczny' ? imgs.find(i => i.preferred && String(i.role).startsWith('rysunek techniczny'))
+        : imgs.find(i => eq(i.role, sec.image_role))
       if (hit) out[sec.key] = hit.url
       continue
     }

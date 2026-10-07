@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { supabase, plError } from '../supabase.js'
 
-const ATTR = { wykonczenie: 'Wykończenie', odplyw: 'Odpływ', ksztalt: 'Kształt' }
-const MATCH = { suffix: 'Końcówka SKU (po „/”)', prefix: 'Początek kodu SKU', base: 'Dokładny kod bazowy' }
+const ATTR = { wykonczenie: 'Wykończenie', powloka: 'Powłoka', odplyw: 'Odpływ', ksztalt: 'Kształt', zdjecie: 'Rola zdjęcia' }
+const MATCH = { suffix: 'Końcówka SKU (po „/”)', segment: 'Fragment SKU (między „/”)', prefix: 'Początek kodu SKU', base: 'Dokładny kod bazowy', position: 'Pozycja zdjęcia w Base', filename: 'Fragment nazwy pliku' }
 const EMPTY = { attribute: 'wykonczenie', match_type: 'suffix', pattern: '', value: '', note: '' }
 
 export default function Rules({ profile }) {

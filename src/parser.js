@@ -2,18 +2,25 @@
 // Ta sama logika dla importu z Baselinkera i z pliku CSV.
 
 const NAME_RX = /^(\S+)\s+Brodzik\s+(\S+)\s+(\S+)\s+(.+?)\s+(\d+)\s*x\s*(\d+)\s*x\s*(\d+(?:[.,]\d+)?)(?:\s+R(\d+))?$/i
-const IMG_SHAPES = { kwadrat: 'kwadratowy', prostokat: 'prostokątny', polokragly: 'półokrągły', pieciokat: 'pięciokątny' }
+const IMG_SHAPES = { kwadrat: 'kwadratowy', prostokat: 'prostokątny', polokragly: 'półokrągły', pieciokat: 'pięciokątny', asymetryczny: 'asymetryczny' }
+const IMG_COLORS = { smooth_white: 'smooth white', black_scale: 'black scale', white_scale: 'white scale', cement_scale: 'cement scale', grey_scale: 'grey scale', anthracite_scale: 'anthracite scale', cashmere_scale: 'cashmere scale' }
+const DRAWING = { kwadratowy: 'kwadrat', 'prostokątny': 'prostokąt', 'półokrągły': 'półokrągły', 'pięciokątny': 'pięciokąt', asymetryczny: 'asymetryczny' }
 const MATERIALS = { akrylowy: 'akryl', kompozytowy: 'kompozyt' }
 
 export const clean = s => String(s ?? '').replace(/\s+/g, ' ').trim()
 
 function ruleFor(rules, brandId, attribute, sku) {
   const [base, ...rest] = sku.split('/')
-  const suffix = rest.join('/')
-  const list = rules.filter(r => r.active !== false && r.attribute === attribute && (!r.brand_id || r.brand_id === brandId))
+  const active = rules.filter(r => r.active !== false && (!r.brand_id || r.brand_id === brandId))
+  // kody powłok (np. AP1) doklejone do końcówki nie przeszkadzają w rozpoznaniu koloru: B/SC/AP1 → B/SC
+  const coatings = new Set(active.filter(r => r.match_type === 'segment').map(r => r.pattern.toUpperCase()))
+  const suffix = rest.filter(seg => !coatings.has(seg.toUpperCase())).join('/')
+  const list = active.filter(r => r.attribute === attribute)
+  if (attribute === 'powloka') return list.find(r => r.match_type === 'segment' && rest.some(seg => seg.toUpperCase() === r.pattern.toUpperCase())) || null
   return (
     list.find(r => r.match_type === 'base' && r.pattern === base) ||
-    list.find(r => r.match_type === 'suffix' && r.pattern === suffix) ||
+    list.filter(r => r.match_type === 'suffix' && r.pattern && (suffix === r.pattern || suffix.startsWith(r.pattern + '/'))).sort((a, b) => b.pattern.length - a.pattern.length)[0] ||
+    list.find(r => r.match_type === 'suffix' && r.pattern === '' && suffix === '') ||
     list.filter(r => r.match_type === 'prefix' && r.pattern && base.startsWith(r.pattern)).sort((a, b) => b.pattern.length - a.pattern.length)[0] ||
     null
   )
@@ -60,6 +67,8 @@ export function parseProducts(raw, brands, rules, pim = new Map()) {
     else if (pr?.color) a.wykonczenie = pr.color
     else if (m) flags.push(`Brak reguły wykończenia dla końcówki SKU „${sku.split('/').slice(1).join('/') || '(brak)'}”`)
     if (pr?.shape && a.ksztalt && pr.shape !== a.ksztalt) flags.push(`Kształt w PIM „${pr.shape}” ≠ rozpoznany „${a.ksztalt}” – sprawdź raport jakości PIM`)
+    const coat = ruleFor(rules, brand?.id, 'powloka', sku)
+    if (coat) a.powloka = coat.value
     // „krótszy/dłuższy bok” ma sens tylko w prostokącie
     const drain = ruleFor(rules, brand?.id, 'odplyw', sku)
     if (drain && a.ksztalt === 'prostokątny') a.odplyw = drain.value
@@ -70,10 +79,27 @@ export function parseProducts(raw, brands, rules, pim = new Map()) {
     const imgRules = rules.filter(r => r.active !== false && r.attribute === 'zdjecie' && (!r.brand_id || r.brand_id === brand?.id))
     const images = (p.images?.length ? p.images : p.image ? [p.image] : []).filter(Boolean).map((url, i) => {
       const file = String(url).split('/').pop().toLowerCase()
-      const rule = imgRules.find(r => r.match_type === 'filename' && r.pattern && file.includes(r.pattern.toLowerCase()))
+      const pathRule = imgRules.find(r => { if (r.match_type !== 'path' || !r.pattern) return false; try { return new RegExp(r.pattern, 'i').test(String(url)) } catch { return false } })
+      const rule = pathRule || imgRules.find(r => r.match_type === 'filename' && r.pattern && file.includes(r.pattern.toLowerCase()))
         || imgRules.find(r => r.match_type === 'position' && Number(r.pattern) === i + 1)
       return { url, position: i + 1, role: rule ? rule.value : null }
     })
+    // który packshot i który rysunek pasuje do tego wariantu (konwencja ścieżek zdjęć)
+    const odplywRules = imgRules.filter(r => r.match_type === 'odplyw')
+    const wantPack = a.odplyw ? odplywRules.find(r => r.pattern && a.odplyw.toLowerCase().includes(r.pattern.toLowerCase()))?.value : odplywRules.find(r => r.pattern === '')?.value
+    const wantDraw = DRAWING[a.ksztalt] ? `rysunek techniczny – ${DRAWING[a.ksztalt]}` : null
+    images.forEach(im => { im.preferred = !!im.role && (im.role === wantPack || im.role === wantDraw) })
+    const main = images[0]
+    if (main?.role?.startsWith('packshot') && wantPack && main.role !== wantPack)
+      flags.push(`Packshot nie pasuje do odpływu: zdjęcie „${main.role.replace('packshot – ', '')}”, wariant „${a.odplyw || 'bez atrybutu odpływu'}”`)
+    const colorDir = main && (String(main.url).match(/aedler\/[^/]+\/([^/]+)\/[^/]+\/[^/]+$/i) || [])[1]
+    if (colorDir && IMG_COLORS[colorDir.toLowerCase()] && a.wykonczenie && !a.wykonczenie.toLowerCase().startsWith(IMG_COLORS[colorDir.toLowerCase()]))
+      flags.push(`Zdjęcie główne z folderu koloru „${colorDir}”, a wariant to „${a.wykonczenie}”`)
+    if (imgRules.some(r => r.match_type === 'path')) {
+      const off = images.filter(im => !im.role).map(im => String(im.url).split('/').slice(-2).join('/'))
+      if (off.length) flags.push(`Zdjęcie spoza konwencji nazw: ${off.join(', ')}`)
+    }
+    if (images.length && images.some(im => im.role) && wantDraw && !images.some(im => im.role === wantDraw)) flags.push(`Brak rysunku technicznego dla kształtu „${a.ksztalt}”`)
     const catFromName = m ? (a.material === 'akryl' ? 'brodziki standard' : a.material === 'kompozyt' ? 'brodziki kompozytowe' : `brodziki ${a.material}`) : null
     const category = pimCategory(pr) || catFromName
     const model = (m ? m[3] : null) || pr?.model || (pr ? (pr.category_path?.slice(-1)[0] || pr.category || null) : null)
