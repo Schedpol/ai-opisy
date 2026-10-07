@@ -17,8 +17,18 @@ export default function ImportPanel({ brands, rules, existingSkus, onSaved, onCl
   const [preview, setPreview] = useState(null)
   const [saving, setSaving] = useState(false)
 
-  function buildPreview(raw, source) {
-    const parsed = parseProducts(raw, brands, rules).map(p => ({ ...p, source }))
+  async function pimMap(skus) {
+    const map = new Map()
+    for (let i = 0; i < skus.length; i += 300) {
+      const { data } = await supabase.from('assortment').select('sku, name, brand, category, category_path, model, color, shape, technology, ean').in('sku', skus.slice(i, i + 300))
+      ;(data || []).forEach(r => map.set(r.sku, r))
+    }
+    return map
+  }
+
+  async function buildPreview(raw, source) {
+    const pim = await pimMap(raw.map(r => String(r.sku || '').trim()).filter(Boolean))
+    const parsed = parseProducts(raw, brands, rules, pim).map(p => ({ ...p, source }))
     setPreview({ parsed, families: groupFamilies(parsed), source })
   }
 
@@ -30,7 +40,7 @@ export default function ImportPanel({ brands, rules, existingSkus, onSaved, onCl
       })
       if (result?.warnings?.length) setWarning(result.warnings.join(' '))
       if (!result?.products?.length) throw new Error(`Baselinker nie zwrócił produktów dla filtra „${filterName}”.`)
-      buildPreview(result.products, 'baselinker')
+      await buildPreview(result.products, 'baselinker')
     } catch (e) { setError(e.message) } finally { setStage('') }
   }
 
@@ -39,13 +49,13 @@ export default function ImportPanel({ brands, rules, existingSkus, onSaved, onCl
     if (!file) return
     setError(''); setWarning(''); setPreview(null)
     const reader = new FileReader()
-    reader.onload = () => {
+    reader.onload = async () => {
       const text = String(reader.result)
       if (/\p{L}\?\p{L}/u.test(text)) setWarning('Plik ma uszkodzone polskie znaki („?” zamiast ą, ę, ś…). Eksport był zapisany bez UTF-8. Nazwy produktów mogą być błędne – zalecany import z Baselinkera.')
       const { data, errors } = Papa.parse(text, { header: true, skipEmptyLines: true, delimitersToGuess: [';', ',', '\t'] })
       const raw = rowsFromBaselinkerCsv(data)
       if (!raw.length) { setError(errors[0]?.message || 'Nie znaleziono kolumny „produkt_sku”. Użyj eksportu CSV z Baselinkera.'); return }
-      buildPreview(raw, 'excel')
+      await buildPreview(raw, 'excel')
     }
     reader.readAsText(file, 'utf-8')
     e.target.value = ''
@@ -115,7 +125,7 @@ export default function ImportPanel({ brands, rules, existingSkus, onSaved, onCl
           </p>
           {preview.families.map(f => (
             <details key={f.key} className="family" open={preview.families.length <= 3}>
-              <summary><strong>{f.model_name || 'Nierozpoznane'}</strong> <span className="muted">{f.brand_name} · {f.series} · {f.items.length} SKU</span></summary>
+              <summary><strong>{f.model_name || 'Nierozpoznane'}</strong> <span className="muted">{f.brand_name} · {f.category || 'bez kategorii'}{f.series ? ` · ${f.series}` : ''} · {f.items.length} SKU</span></summary>
               <div className="table-wrap">
                 <table className="compact">
                   <thead><tr><th>SKU</th>{ATTR_COLS.map(([, l]) => <th key={l}>{l}</th>)}<th>Uwagi</th></tr></thead>

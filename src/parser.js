@@ -19,16 +19,28 @@ function ruleFor(rules, brandId, attribute, sku) {
   )
 }
 
-// raw: [{ sku, ean, name, image, bl_id, weight }], brands: [{id, name}], rules: import_rules
-export function parseProducts(raw, brands, rules) {
+export const pimCategory = row => row?.category_path?.length ? row.category_path.join(' ').toLowerCase() : (row?.category ? String(row.category).toLowerCase() : null)
+const DIMS_RX = /(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)(?:\s*x\s*(\d+(?:[.,]\d+)?))?/i
+
+// raw: [{ sku, ean, name, image, bl_id, weight }], brands: [{id, name}], rules: import_rules, pim: Map sku → wiersz asortymentu z PIM (opcjonalnie)
+export function parseProducts(raw, brands, rules, pim = new Map()) {
   const out = raw.map(p => {
     const sku = clean(p.sku), name = clean(p.name), flags = []
+    const pr = pim.get(sku)
     if (String(p.name ?? '') !== name) flags.push('Podwójne spacje w nazwie (poprawione)')
     if (/\p{L}\?\p{L}/u.test(name)) flags.push('Nazwa zawiera „?” zamiast polskich znaków – sprawdź kodowanie pliku')
     const m = name.match(NAME_RX)
-    const brand = m ? brands.find(b => b.name.toLowerCase() === m[1].toLowerCase()) : null
+    const brandName = m ? m[1] : pr?.brand
+    const brand = brandName ? brands.find(b => b.name.toLowerCase() === String(brandName).toLowerCase()) : null
     const a = {}
-    if (!m) flags.push('Nazwa nierozpoznana – rodzinę i atrybuty uzupełnij ręcznie')
+    if (!m && pr) {
+      // produkt spoza wzorca brodzików (wanna, odpływ, nośnik…) – atrybuty z PIM i z wymiaru w nazwie
+      if (!brand) flags.push(`Nieznana marka „${pr.brand || '—'}” – dodaj ją w bazie`)
+      const d = (pr.name || name).match(DIMS_RX)
+      if (d) { a.wymiar = `${d[1]}x${d[2]}`; if (d[3]) a.wysokosc_cm = Number(d[3].replace(',', '.')) }
+      if (pr.shape) a.ksztalt = pr.shape
+      if (!pr.model) flags.push('Brak modelu w PIM – rodzina utworzona z kategorii')
+    } else if (!m) flags.push('Nazwa nierozpoznana i brak produktu w liście PIM – rodzinę i atrybuty uzupełnij ręcznie')
     else {
       if (!brand) flags.push(`Nieznana marka „${m[1]}” – dodaj ją w bazie`)
       a.material = MATERIALS[m[2].toLowerCase()] || m[2].toLowerCase()
@@ -40,9 +52,14 @@ export function parseProducts(raw, brands, rules) {
       if (m[8]) a.promien_cm = Number(m[8])
       if (override && override.value !== fromName) flags.push(`Kształt z reguły słownika: ${override.value} (z nazwy wynikałby ${fromName})`)
     }
-    const fin = ruleFor(rules, brand?.id, 'wykonczenie', sku)
+    // reguła „brak końcówki SKU” dotyczy brodzików – nie przenosimy jej na wanny, odpływy, nośniki
+    const isTray = !!m || /^brodziki/.test(pimCategory(pr) || '')
+    let fin = ruleFor(rules, brand?.id, 'wykonczenie', sku)
+    if (fin && fin.match_type === 'suffix' && fin.pattern === '' && !isTray) fin = null
     if (fin) a.wykonczenie = fin.value
+    else if (pr?.color) a.wykonczenie = pr.color
     else if (m) flags.push(`Brak reguły wykończenia dla końcówki SKU „${sku.split('/').slice(1).join('/') || '(brak)'}”`)
+    if (pr?.shape && a.ksztalt && pr.shape !== a.ksztalt) flags.push(`Kształt w PIM „${pr.shape}” ≠ rozpoznany „${a.ksztalt}” – sprawdź raport jakości PIM`)
     // „krótszy/dłuższy bok” ma sens tylko w prostokącie
     const drain = ruleFor(rules, brand?.id, 'odplyw', sku)
     if (drain && a.ksztalt === 'prostokątny') a.odplyw = drain.value
@@ -57,11 +74,14 @@ export function parseProducts(raw, brands, rules) {
         || imgRules.find(r => r.match_type === 'position' && Number(r.pattern) === i + 1)
       return { url, position: i + 1, role: rule ? rule.value : null }
     })
+    const catFromName = m ? (a.material === 'akryl' ? 'brodziki standard' : a.material === 'kompozyt' ? 'brodziki kompozytowe' : `brodziki ${a.material}`) : null
+    const category = pimCategory(pr) || catFromName
+    const model = (m ? m[3] : null) || pr?.model || (pr ? (pr.category_path?.slice(-1)[0] || pr.category || null) : null)
     return {
-      sku, ean: clean(p.ean), name, image_url: images[0]?.url || null, images, bl_id: p.bl_id ? Number(p.bl_id) : null,
-      brand_id: brand?.id || null, brand_name: brand?.name || (m ? m[1] : null),
-      model_name: m ? m[3] : null, series: m ? clean(m[4]) : null, category: m ? `brodziki ${a.material === 'akryl' ? 'akrylowe' : a.material}` : null,
-      attributes: a, flags,
+      sku, ean: clean(p.ean) || pr?.ean || '', name, image_url: images[0]?.url || null, images, bl_id: p.bl_id ? Number(p.bl_id) : null,
+      brand_id: brand?.id || null, brand_name: brand?.name || brandName || null,
+      model_name: model, series: m ? clean(m[4]) : (pr?.technology ? pr.technology.replace(/\b\w/g, x => x.toUpperCase()) : null), category,
+      attributes: a, flags: pr || !m || !pim.size ? flags : [...flags, 'Brak produktu na liście PIM – kategoria z nazwy'],
     }
   })
   // nazwa identyczna z innym SKU = marketplace pokaże duplikaty

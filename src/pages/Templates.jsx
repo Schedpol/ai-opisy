@@ -90,7 +90,16 @@ export default function Templates({ profile }) {
   }
 
   if (!list) return <section className="page"><p className="muted">Ładowanie…</p></section>
-  const label = t => { const c = names.c.find(x => x.id === t.channel_id); const b = names.b.find(x => x.id === t.brand_id); return `${b?.name || ''} · ${c ? `${c.marketplace} ${c.language.toUpperCase()}` : ''}` }
+  const label = t => { const c = names.c.find(x => x.id === t.channel_id); const b = names.b.find(x => x.id === t.brand_id); return `${b?.name || ''} · ${c ? `${c.marketplace} ${c.language.toUpperCase()}` : ''} · ${t.category || 'domyślny'}` }
+  async function newForCategory() {
+    const category = (prompt('Dla jakiej kategorii? (jak w PIM, np. „nośniki”). Nowy szablon będzie kopią obecnie wybranego.') || '').trim().toLowerCase()
+    if (!category) return
+    if (list.some(t => t.channel_id === current.channel_id && t.brand_id === current.brand_id && (t.category || '') === category)) { setMsg({ type: 'error', text: 'Taki szablon już istnieje.' }); return }
+    const base = current.name.split(' · ').slice(0, 2).join(' · ')
+    const { data, error } = await supabase.from('templates').insert({ channel_id: current.channel_id, brand_id: current.brand_id, name: `${base} · ${category}`, sections: draft.sections, styles: draft.styles, version: 1, status: 'aktywny', category }).select('id').single()
+    setMsg(error ? { type: 'error', text: plError(error.message) } : { type: 'ok', text: `Utworzono szablon dla kategorii „${category}”. Zmień tematy sekcji i zapisz.` })
+    if (!error) load(data.id)
+  }
 
   return (
     <section className="page wide">
@@ -100,9 +109,11 @@ export default function Templates({ profile }) {
           <select value={sel || ''} onChange={e => { const t = list.find(x => x.id === e.target.value); setSel(t.id); setDraft({ sections: t.sections, styles: { ...DEFAULT_STYLES, ...t.styles } }); setMsg(null) }} aria-label="Wybierz szablon">
             {list.map(t => <option key={t.id} value={t.id}>{label(t)} · wersja {t.version}</option>)}
           </select>
+          {admin && current && <button className="link-dark gap" onClick={newForCategory}>+ szablon dla kategorii</button>}
         </div>
       </header>
       {!admin && <p className="hint">Szablony edytuje admin. Możesz oglądać podgląd.</p>}
+      <p className="muted small">Generacja używa szablonu kategorii produktu (np. „wanny”), a jeśli go nie ma – domyślnego dla marki i kanału.</p>
       {draft && (
         <div className="tpl-grid">
           <div className="tpl-editor">

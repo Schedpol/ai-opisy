@@ -327,3 +327,4 @@ table.rules td.rule-text textarea { width: 100%; font: inherit; font-size: 13.5p
 .upload-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
 .upload-head .btn.upload { margin: 0; cursor: pointer; }
 .upload-panel details { margin-top: 6px; }
+.kw-filter { flex-wrap: wrap; margin-bottom: 14px; } .tpl-pick { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }

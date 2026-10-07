@@ -11,14 +11,16 @@ export async function buildContext(familyId, channelId) {
   const [ch, br, tp, lead, facts, banks, lib, rules] = await Promise.all([
     supabase.from('channels').select('*').eq('id', channelId).single(),
     supabase.from('brands').select('id, name').eq('id', family.brand_id).single(),
-    supabase.from('templates').select('*').eq('channel_id', channelId).eq('brand_id', family.brand_id).eq('status', 'aktywny').maybeSingle(),
+    supabase.from('templates').select('*').eq('channel_id', channelId).eq('brand_id', family.brand_id).eq('status', 'aktywny'),
     family.lead_product_id ? supabase.from('products').select('*').eq('id', family.lead_product_id).single() : Promise.resolve({ data: null }),
     supabase.from('kb_facts').select('*').eq('status', 'zatwierdzony'),
     supabase.from('keyword_banks').select('*'),
     supabase.from('media_library').select('*'),
     supabase.from('qa_rules').select('*').eq('status', 'aktywna'),
   ])
-  const channel = ch.data, template = tp.data, product = lead.data
+  const eqc = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
+  const template = (tp.data || []).find(t => t.category && eqc(t.category, family.category)) || (tp.data || []).find(t => !t.category) || null
+  const channel = ch.data, product = lead.data
   const problems = []
   if (!product) problems.push('Wybierz wariant wiodący rodziny (ekran Produkty).')
   if (!template) problems.push(`Brak aktywnego szablonu dla ${br.data?.name} · ${MARKET(channel)}.`)
