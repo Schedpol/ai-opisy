@@ -12,6 +12,7 @@ const NAV = [
   { to: '/frazy', label: 'Frazy kluczowe' },
   { to: '/weryfikacja', label: 'Weryfikacja' },
   { to: '/publikacja', label: 'Publikacja' },
+  { to: '/parametry', label: 'Parametry Base' },
   { to: '/reguly', label: 'Reguły QA' },
 ]
 

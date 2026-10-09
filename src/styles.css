@@ -364,3 +364,15 @@ tr.sub-row td { padding-top: 0; border-top: none; }
 .inline-label { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--ink-soft); }
 .inline-label input { flex: 1; }
 .lang-filter { flex-wrap: wrap; margin: 6px 0 12px; }
+/* Parametry Base */
+.filters { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.filters select, .filters input { min-width: 180px; }
+.row-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+.params-wrap { max-height: 70vh; overflow: auto; }
+table.compact.params-table th { position: sticky; top: 0; background: var(--surface); z-index: 1; white-space: nowrap; font-size: 12px; }
+table.compact.params-table td { white-space: nowrap; font-size: 13px; }
+td.empty-cell { color: var(--ink-soft); background: #FFF8EC; }
+table.map-table td { vertical-align: top; white-space: normal; }
+table.map-table input, table.map-table select { min-width: 0; width: 100%; font-size: 13px; padding: 6px 8px; }
+table.map-table input.num { width: 70px; }
+.kw-cfg { display: flex; align-items: center; gap: 6px; font-size: 13px; } .inline-input { width: 140px !important; display: inline-block; padding: 3px 6px !important; font-size: 12px !important; }

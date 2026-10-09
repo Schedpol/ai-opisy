@@ -95,7 +95,7 @@ export function rowsFromPim(rows) {
       category: path[0] || null, category_path: path.length ? path : null,
       technology: String(r[C.technology] || '').trim() || null,
       color: r[C.color] ? titleCase(r[C.color].trim()) : null,
-      shape: SHAPES[shapeKey] || (shapeKey || null), source: 'pim', bl_id: null,
+      shape: SHAPES[shapeKey] || (shapeKey || null), source: 'pim', bl_id: null, raw: r.map(x => String(x ?? '')),
       _raw: { name: rawName, series: String(r[C.series_label] || '').trim(), dims: String(r[C.dims_label] || '').trim(), weight: String(r[C.weight] || '').trim(), path: String(r[C.path] || '') },
     })
   })

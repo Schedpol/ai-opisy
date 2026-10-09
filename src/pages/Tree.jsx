@@ -64,7 +64,7 @@ function Upload({ last, onDone }) {
       setBusy(`Zapisywanie ${rows.length} SKU…`)
       const { data: { session } } = await supabase.auth.getSession()
       const batch = crypto.randomUUID()
-      const uniq = [...new Map(rows.map(r => [r.sku, r])).values()].map(r => ({ category_path: null, technology: null, color: null, shape: null, source: 'csv', issues: [], ...r, batch_id: batch, uploaded_by: session.user.id, uploaded_at: new Date().toISOString() }))
+      const uniq = [...new Map(rows.map(r => [r.sku, r])).values()].map(r => ({ category_path: null, technology: null, color: null, shape: null, source: 'csv', issues: [], raw: null, ...r, batch_id: batch, uploaded_by: session.user.id, uploaded_at: new Date().toISOString() }))
       for (let i = 0; i < uniq.length; i += 500) {
         const { error } = await supabase.from('assortment').upsert(uniq.slice(i, i + 500), { onConflict: 'sku' })
         if (error) throw error
