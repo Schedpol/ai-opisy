@@ -20,3 +20,22 @@ export const TITLE_PRESETS = {
   kaufland: { pattern: '[marka] [model] [typ produktu] [wymiary] cm, [kolor/wykończenie] – marka i nazwa produktu na początku, zwięźle, bez ciągu słów kluczowych', max: 80 },
 }
 export const titlePresetFor = mp => TITLE_PRESETS[String(mp || '').toLowerCase().replace(/[^a-z]/g, '')] || null
+
+// Języki parametrów w Base (tłumaczenie wartości + nazwy parametrów ustawione w Base) i banków fraz.
+// location = kod lokalizacji DataForSEO (Google Ads) dla rynku, z którego pobierane są frazy.
+export const PARAM_LANGS = {
+  ro: { name: 'rumuński', country: 'Rumunia', location: 2642 },
+  en: { name: 'angielski', country: 'Wielka Brytania', location: 2826 },
+  bg: { name: 'bułgarski', country: 'Bułgaria', location: 2100 },
+  cs: { name: 'czeski', country: 'Czechy', location: 2203 },
+  de: { name: 'niemiecki', country: 'Niemcy', location: 2276 },
+  es: { name: 'hiszpański', country: 'Hiszpania', location: 2724 },
+  et: { name: 'estoński', country: 'Estonia', location: 2233 },
+  fr: { name: 'francuski', country: 'Francja', location: 2250 },
+  hu: { name: 'węgierski', country: 'Węgry', location: 2348 },
+  it: { name: 'włoski', country: 'Włochy', location: 2380 },
+  lt: { name: 'litewski', country: 'Litwa', location: 2440 },
+  lv: { name: 'łotewski', country: 'Łotwa', location: 2428 },
+  sk: { name: 'słowacki', country: 'Słowacja', location: 2703 },
+}
+export const KEYWORD_LANGS = { pl: LANGS.pl, ...PARAM_LANGS }

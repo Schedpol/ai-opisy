@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, plError } from '../supabase.js'
 import { runJob } from '../jobs.js'
 
-import { LANGS } from '../languages.js'
+import { KEYWORD_LANGS as LANGS } from '../languages.js'
 const LANG = Object.fromEntries(Object.entries(LANGS).map(([k, v]) => [k, `${v.name} (${v.country})`]))
 
 const LOCATION = Object.fromEntries(Object.entries(LANGS).map(([k, v]) => [k, v.location]))

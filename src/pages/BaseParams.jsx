@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, plError } from '../supabase.js'
 import { runJob, PUBLISH_URL } from '../jobs.js'
-import { LANGS } from '../languages.js'
+import { PARAM_LANGS as LANGS } from '../languages.js'
 import { computeParams, categoryKey } from '../params.js'
 import { skuAttributes } from '../parser.js'
 
@@ -92,6 +92,7 @@ function Translations({ lang, mapping, names, values, canEdit, onSaved }) {
   return (
     <details className="panel" open={proposals.length > 0}>
       <summary><strong>Tłumaczenia – {LANGS[lang]?.name || lang.toUpperCase()}</strong> <span className="muted small">{proposals.length ? `${proposals.length} do zatwierdzenia` : 'wszystkie zatwierdzone'} · do Base trafiają tylko zatwierdzone</span></summary>
+      <p className="muted small">Nazwy parametrów muszą być <strong>identyczne jak w Base</strong> (co do znaku) – inna pisownia utworzy w Base nowy parametr. Zmieniaj je tylko po zmianie w Base.</p>
       <div className="row-actions">
         <label className="check small"><input type="checkbox" checked={onlyProp} onChange={e => setOnlyProp(e.target.checked)} /> tylko do zatwierdzenia</label>
         {canEdit && proposals.length > 0 && <button className="btn" onClick={() => save(proposals, 'zatwierdzone')}>Zatwierdź wszystkie ({proposals.length})</button>}
@@ -282,7 +283,7 @@ export default function BaseParams({ profile }) {
       <div className="panel lang-bar">
         <label>Język parametrów<select value={lang} onChange={e => { setLang(e.target.value); setRes(null) }}>
           <option value="pl">polski – domyślny język katalogu</option>
-          {Object.entries(LANGS).filter(([k]) => k !== 'pl').map(([k, v]) => <option key={k} value={k}>{v.name} ({k.toUpperCase()})</option>)}
+          {Object.entries(LANGS).sort((a, b) => a[1].name.localeCompare(b[1].name, 'pl')).map(([k, v]) => <option key={k} value={k}>{v.name} ({k.toUpperCase()})</option>)}
         </select></label>
         {lang !== 'pl' && <>
           <span className="muted small">{need.names.length || need.values.length ? `Do przetłumaczenia: ${need.names.length} nazw parametrów, ${need.values.length} wartości.` : 'Słownik kompletny dla tej listy.'} Zapis do Base pod kluczem <code>features|{lang}</code>.</span>
