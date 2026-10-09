@@ -376,3 +376,10 @@ table.map-table td { vertical-align: top; white-space: normal; }
 table.map-table input, table.map-table select { min-width: 0; width: 100%; font-size: 13px; padding: 6px 8px; }
 table.map-table input.num { width: 70px; }
 .kw-cfg { display: flex; align-items: center; gap: 6px; font-size: 13px; } .inline-input { width: 140px !important; display: inline-block; padding: 3px 6px !important; font-size: 12px !important; }
+.lang-bar { display: flex; gap: 16px; align-items: flex-end; flex-wrap: wrap; }
+.lang-bar label { min-width: 260px; }
+td.tr-cell { color: #8A5A00; background: #FFF4DE; font-style: italic; }
+.tr-miss { color: #8A5A00; font-style: italic; }
+.tr-wrap { max-height: 55vh; overflow: auto; }
+table.compact.tr-table td { white-space: normal; }
+table.compact.tr-table input { width: 100%; }
