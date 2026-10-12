@@ -1,4 +1,6 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { useState } from 'react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import HelpDrawer from '../help/HelpDrawer.jsx'
 import { supabase, ROLE_LABELS } from '../supabase.js'
 
 const NAV = [
@@ -17,6 +19,8 @@ const NAV = [
 ]
 
 export default function Layout({ profile }) {
+  const [help, setHelp] = useState(false)
+  const loc = useLocation()
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -35,6 +39,10 @@ export default function Layout({ profile }) {
             <NavLink to="/ustawienia" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>Ustawienia</NavLink></>
           )}
         </nav>
+        <div className="help-links">
+          <NavLink to="/pomoc" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>Instrukcja</NavLink>
+          {loc.pathname !== '/pomoc' && <button className="nav-link help-btn" onClick={() => setHelp(v => !v)} aria-expanded={help}>? Pomoc do tego ekranu</button>}
+        </div>
         <div className="sidebar-foot">
           <NavLink to="/konto" className="me">
             <span className="me-name">{profile?.full_name || profile?.email || '…'}</span>
@@ -46,6 +54,7 @@ export default function Layout({ profile }) {
       <main className="content">
         <Outlet />
       </main>
+      <HelpDrawer open={help && loc.pathname !== '/pomoc'} onClose={() => setHelp(false)} />
     </div>
   )
 }

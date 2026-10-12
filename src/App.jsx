@@ -16,6 +16,7 @@ import Review from './pages/Review.jsx'
 import Library from './pages/Library.jsx'
 import Publish from './pages/Publish.jsx'
 import BaseParams from './pages/BaseParams.jsx'
+import Help from './pages/Help.jsx'
 import Settings from './pages/Settings.jsx'
 import QaRules from './pages/QaRules.jsx'
 import Tree from './pages/Tree.jsx'
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="biblioteka" element={<Library profile={profile} />} />
           <Route path="publikacja" element={<Publish profile={profile} />} />
           <Route path="parametry" element={<BaseParams profile={profile} />} />
+          <Route path="pomoc" element={<Help />} />
           <Route path="ustawienia" element={!profile ? null : profile.role === 'admin' ? <Settings /> : <Navigate to="/" />} />
           <Route path="reguly" element={<QaRules profile={profile} />} />
           <Route path="uzytkownicy" element={!profile ? null : profile.role === 'admin' ? <Users /> : <Navigate to="/" />} />

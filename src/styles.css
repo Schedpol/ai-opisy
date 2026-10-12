@@ -383,3 +383,20 @@ td.tr-cell { color: #8A5A00; background: #FFF4DE; font-style: italic; }
 .tr-wrap { max-height: 55vh; overflow: auto; }
 table.compact.tr-table td { white-space: normal; }
 table.compact.tr-table input { width: 100%; }
+/* Instrukcja i pomoc */
+.help-links { border-top: 1px solid rgba(255,255,255,.12); margin-top: 8px; padding-top: 8px; display: flex; flex-direction: column; }
+.help-btn { background: none; border: none; text-align: left; cursor: pointer; font: inherit; width: 100%; }
+.help-layout { display: grid; grid-template-columns: 240px 1fr; gap: 24px; align-items: start; }
+.help-toc { position: sticky; top: 16px; display: flex; flex-direction: column; gap: 8px; }
+.help-toc .link-dark { text-align: left; }
+.help-sub { display: flex; flex-direction: column; gap: 4px; padding-left: 12px; margin-top: 4px; }
+.help-section { scroll-margin-top: 16px; }
+.help-section h3 { scroll-margin-top: 16px; margin-top: 20px; }
+.help-section li { margin: 4px 0; }
+table.compact.help-table td { white-space: normal; vertical-align: top; }
+.help-diagram { width: 100%; height: auto; margin: 12px 0; }
+.hit { background: #FFF2C2; }
+.help-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(380px, 92vw); background: var(--surface); border-left: 1px solid var(--line); box-shadow: -8px 0 24px rgba(13,27,62,.08); padding: 20px; overflow: auto; z-index: 50; display: flex; flex-direction: column; gap: 12px; }
+.help-drawer-head { display: flex; justify-content: space-between; align-items: center; }
+.help-drawer li { margin: 6px 0; }
+@media (max-width: 900px) { .help-layout { grid-template-columns: 1fr; } .help-toc { position: static; } }
