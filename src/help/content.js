@@ -18,11 +18,11 @@ Role dziedziczą uprawnienia w górę: akceptujący może wszystko, co generują
 
 Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne opisy powstają w minutach. W trakcie zadania AI (generacja, import, tłumaczenie, porównanie z Base) na środku ekranu pojawia się okno z kratką odpływu, nazwą zadania i czasem oczekiwania. Przycisk „Ukryj” (albo klawisz Esc) chowa okno – zadanie trwa dalej w tle, a „spływająca woda” w logo w menu pokazuje, że jeszcze pracuje. Wynik pojawi się na ekranie, z którego zadanie zostało uruchomione. Jeśli weryfikujący odrzuci opis, wraca on do ponownej generacji, a powtarzające się uwagi warto zamieniać w reguły QA.` },
 
-  { id: 'ekrany', title: 'Ekrany aplikacji', md: `Ekrany są ułożone w menu w kolejności pracy: od danych produktu, przez wiedzę i szablony, do weryfikacji i publikacji.
+  { id: 'ekrany', title: 'Ekrany aplikacji', md: `Menu ma pięć grup w kolejności pracy: **Start** (Dashboard), **Produkty**, **Przygotowanie treści**, **Kontrola i publikacja** oraz **Konfiguracja** (dla admina). Liczba przy Weryfikacji pokazuje opisy czekające na sprawdzenie.
 
 | Ekran | Do czego służy | Kto |
 | --- | --- | --- |
-| [Dashboard](/) | lejek opisów (wygenerowane → zaakceptowane → opublikowane), jakość, liczba poprawek | wszyscy |
+| [Dashboard](/) | pokrycie asortymentu (PIM → Baselinker → aplikacja → treść → publikacja) z listami braków do pobrania, panel „Od czego zacząć”, statusy opisów, jakość | wszyscy; stan Baselinkera odświeża akceptujący |
 | [Drzewo produktów](/drzewo) | lista asortymentu z PIM w strukturze marka › kategoria › model › SKU, pokrycie opisami per rynek, raport jakości danych PIM | wszyscy; wgrywa listę admin |
 | [Produkty](/produkty) | import z Baselinkera, rodziny (modele), wybór wariantu wiodącego, generacja opisu bazowego | generujący |
 | [Słownik importu](/slownik) | reguły odczytu atrybutów z SKU: kolor (np. B/SC = Black Scale), powłoka (AP1), odpływ, kształt, zestaw z nośnikiem (/NO), role zdjęć | admin |
@@ -152,7 +152,9 @@ export const SCREEN_HELP = [
 - Pod każdym kanałem: wzorzec tytułu; obok limit znaków tytułu.
 - Kanału z opisami nie da się usunąć – wyłącz go („Aktywny”).` },
   { path: '/uzytkownicy', title: 'Użytkownicy', section: 'role', md: `- Nadawanie ról: generujący, akceptujący, admin. Role dziedziczą uprawnienia w górę.` },
-  { path: '/', title: 'Dashboard', section: 'przeplyw', md: `- Lejek: wygenerowane → zaakceptowane → opublikowane, per rynek.
-- Jakość: odsetek opisów zaakceptowanych bez poprawek – dobry sygnał, czy fakty i szablony są w porządku.` },
+  { path: '/', title: 'Dashboard', section: 'ekrany', md: `- **Pokrycie asortymentu:** ile SKU jest w PIM, w Baselinkerze, w aplikacji, z treścią i opublikowanych. Przy każdej luce jest lista CSV do pobrania.
+- Filtr rynku zmienia dwa ostatnie etapy (treść i publikacja) na wybrany kanał.
+- **Odśwież stan Base** (akceptujący, admin) pobiera aktualną listę SKU z katalogu Baselinkera – rób to po zmianach w Base.
+- **Od czego zacząć** – najważniejsze następne kroki z linkami do właściwych ekranów.` },
 ]
 export const helpFor = path => SCREEN_HELP.find(h => h.path !== '/' && path.startsWith(h.path)) || (path === '/' ? SCREEN_HELP.find(h => h.path === '/') : null)
