@@ -20,6 +20,7 @@ import Help from './pages/Help.jsx'
 import Settings from './pages/Settings.jsx'
 import QaRules from './pages/QaRules.jsx'
 import Tree from './pages/Tree.jsx'
+import DrainLoader from './components/DrainLoader.jsx'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -48,7 +49,7 @@ export default function App() {
       </main>
     )
   }
-  if (session === undefined) return <main className="center-screen"><p className="muted working" role="status">Ładowanie…</p></main>
+  if (session === undefined) return <main className="center-screen"><DrainLoader /></main>
   if (!session) return <Login />
 
   const soon = (title, stage) => <Soon title={title} stage={stage} />

@@ -4,6 +4,7 @@ import Papa from 'papaparse'
 import { supabase, plError } from '../supabase.js'
 import { parseModel } from '../parser.js'
 import { decodeBytes, repairTable, isPim, rowsFromPim, RULES } from '../pim.js'
+import DrainLoader from '../components/DrainLoader.jsx'
 
 const ST = {
   opublikowany: { label: 'opublikowany', cls: 'st-opublikowany' },
@@ -199,7 +200,7 @@ export default function Tree() {
 
   if (err) return <section className="page"><h1>Drzewo produktów</h1><p className="error">{err}</p>
     {/column|kolumn/i.test(err) && <p className="hint">Wygląda na to, że baza nie ma nowych kolumn. Uruchom w Supabase migracje 10_asortyment_pim.sql i 11_jakosc_pim.sql, potem odśwież stronę.</p>}</section>
-  if (!d) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
+  if (!d) return <section className="page"><DrainLoader /></section>
   const toggle = k => { const n = new Set(open); n.has(k) ? n.delete(k) : n.add(k); setOpen(n) }
   const last = d.as.length ? { at: d.as.reduce((m, r) => r.uploaded_at > m ? r.uploaded_at : m, d.as[0].uploaded_at), count: d.as.length, pim: d.as.some(r => r.source === 'pim') } : null
   const sortKeys = o => Object.keys(o).sort((a, b) => (a === '—') - (b === '—') || a.localeCompare(b, 'pl'))

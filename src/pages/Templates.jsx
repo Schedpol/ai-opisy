@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { copyTemplates, createBlankTemplates } from '../channels.js'
 import { supabase, plError } from '../supabase.js'
 import { renderDescription, resolveImages, DEFAULT_STYLES, FTP_ASSETS, ftpLink, OUTPUT_PRESETS } from '../render.js'
+import DrainLoader from '../components/DrainLoader.jsx'
 
 function sampleFields(template) {
   const f = { HERO_IMG_ALT: 'Baner', HERO_H1: 'Brodzik akrylowy Aedler Antis 90x90 cm, Smooth White', HERO_LEAD: 'Tu pojawi się lead: 1–2 zdania z najważniejszymi korzyściami i frazą główną.', FAQ_H2: 'Najczęściej zadawane pytania' }
@@ -111,7 +112,7 @@ function TemplateEditor({ profile, templateId, crumbs }) {
     setBusy(false); if (!error) load(current.id)
   }
 
-  if (!list) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
+  if (!list) return <section className="page"><DrainLoader /></section>
   if (!current) return <section className="page wide">{crumbs}<p className="error">Nie znaleziono szablonu.</p></section>
   const label = t => { const c = names.c.find(x => x.id === t.channel_id); const b = names.b.find(x => x.id === t.brand_id); return `${b?.name || ''} · ${c ? `${c.marketplace} ${c.language.toUpperCase()}` : ''} · ${t.category || 'domyślny'}` }
 
@@ -322,7 +323,7 @@ export default function Templates({ profile }) {
     setD({ templates: t.data || [], channels: c.data || [], brands: b.data || [], families: f.data || [] })
   }
   useEffect(() => { load() }, [])
-  if (!d) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
+  if (!d) return <section className="page"><DrainLoader /></section>
 
   const channel = d.channels.find(c => c.id === chId)
   const tpl = d.templates.find(t => t.id === tid)

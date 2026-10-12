@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../supabase.js'
 import { runJob, PUBLISH_URL } from '../jobs.js'
+import DrainLoader from '../components/DrainLoader.jsx'
 
 const opisy = n => `${n} ${n === 1 ? 'opis' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'opisy' : 'opisów'}`
 
@@ -33,7 +34,7 @@ export default function Publish({ profile }) {
   }
   useEffect(() => { load() }, [])
 
-  if (!data) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
+  if (!data) return <section className="page"><DrainLoader /></section>
   const ch = data.channels.find(c => c.id === channel)
   const inCh = data.rows.filter(r => r.channel_id === channel)
   const lists = {

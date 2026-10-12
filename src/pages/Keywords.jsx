@@ -3,6 +3,7 @@ import { supabase, plError } from '../supabase.js'
 import { runJob } from '../jobs.js'
 
 import { KEYWORD_LANGS as LANGS } from '../languages.js'
+import DrainLoader from '../components/DrainLoader.jsx'
 const LANG = Object.fromEntries(Object.entries(LANGS).map(([k, v]) => [k, `${v.name} (${v.country})`]))
 
 const LOCATION = Object.fromEntries(Object.entries(LANGS).map(([k, v]) => [k, v.location]))
@@ -143,7 +144,7 @@ export default function Keywords({ profile }) {
   }
   useEffect(() => { load() }, [])
   if (err) return <section className="page"><h1>Frazy kluczowe</h1><p className="error">{err}</p></section>
-  if (!banks) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
+  if (!banks) return <section className="page"><DrainLoader /></section>
   const order = { ro: 1, hu: 2, bg: 3 }
   return (
     <section className="page wide">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import HelpDrawer from '../help/HelpDrawer.jsx'
+import JobOverlay from './JobOverlay.jsx'
 import { jobActivity, activeJobCount } from '../jobs.js'
 import { supabase, ROLE_LABELS } from '../supabase.js'
 
@@ -59,6 +60,7 @@ export default function Layout({ profile }) {
         <Outlet />
       </main>
       <HelpDrawer open={help && loc.pathname !== '/pomoc'} onClose={() => setHelp(false)} />
+      <JobOverlay />
     </div>
   )
 }

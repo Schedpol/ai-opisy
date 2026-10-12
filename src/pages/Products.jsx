@@ -3,6 +3,7 @@ import { supabase, plError } from '../supabase.js'
 import { Link, useNavigate } from 'react-router-dom'
 import ImportPanel from '../components/ImportPanel.jsx'
 import { generateBase } from '../gen.js'
+import DrainLoader from '../components/DrainLoader.jsx'
 
 const ATTRS = [['wymiar', 'Wymiar'], ['wysokosc_cm', 'Wys. cm'], ['ksztalt', 'Kształt'], ['wykonczenie', 'Wykończenie'], ['powloka', 'Powłoka'], ['odplyw', 'Odpływ'], ['w_zestawie', 'W zestawie']]
 const minor = f => f.startsWith('Nazwa identyczna') || f === 'Waga = 0' || f.startsWith('Podwójne') || f.startsWith('Kształt z reguły') || f.startsWith('Odpływ odczytany')
@@ -52,7 +53,7 @@ export default function Products() {
   }
 
   if (error) return <section className="page"><h1>Produkty</h1><p className="error">{error}</p></section>
-  if (!data) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
+  if (!data) return <section className="page"><DrainLoader /></section>
 
   const brandName = id => data.brands.find(b => b.id === id)?.name || ''
   const orphans = data.products.filter(p => !p.family_id)

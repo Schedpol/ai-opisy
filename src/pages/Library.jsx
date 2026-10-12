@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { supabase, plError } from '../supabase.js'
+import DrainLoader from '../components/DrainLoader.jsx'
 
 const SCOPES = { seria: 'Seria', technologia: 'Technologia', model: 'Model (rodzina)', marka: 'Marka' }
 const ROLES = ['baner', 'technologia', 'przekrój', 'montaż', 'aranżacja', 'ikona']
@@ -46,7 +47,7 @@ export default function Library({ profile }) {
   async function remove(m) { if (confirm('Usunąć grafikę z biblioteki?')) { await supabase.from('media_library').delete().eq('id', m.id); load() } }
 
   const scopeText = m => m.scope === 'marka' ? (ctx.brands.find(b => b.id === m.brand_id)?.name || 'marka') : m.scope === 'model' ? (ctx.families.find(x => x.id === m.scope_value)?.model_name || '—') : m.scope_value
-  if (!items) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
+  if (!items) return <section className="page"><DrainLoader /></section>
 
   return (
     <section className="page wide">

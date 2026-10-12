@@ -4,6 +4,7 @@ import { runJob, PUBLISH_URL } from '../jobs.js'
 import { PARAM_LANGS as LANGS } from '../languages.js'
 import { computeParams, categoryKey } from '../params.js'
 import { skuAttributes } from '../parser.js'
+import DrainLoader from '../components/DrainLoader.jsx'
 
 const SOURCES = { pim: 'kolumna PIM', atrybut: 'atrybut produktu', nazwa: 'z nazwy (wyrażenie)', stala: 'stała wartość', frazy: 'bank fraz', pomin: 'nie wysyłaj' }
 const TRANSFORMS = { tekst: 'bez zmian', etykieta: 'etykieta PIM → tekst', liczba: 'liczba (kropka)', liczba_pl: 'liczba (przecinek)' }
@@ -205,7 +206,7 @@ export default function BaseParams({ profile }) {
     })
   }, [d, lang])
   if (err) return <section className="page"><h1>Parametry w Base</h1><p className="error">{err}</p></section>
-  if (!d) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
+  if (!d) return <section className="page"><DrainLoader /></section>
 
   const active = d.mapping.filter(m => m.source !== 'pomin')
   const noRaw = d.rows.length > 0 && !d.rows.some(r => Array.isArray(r.raw))

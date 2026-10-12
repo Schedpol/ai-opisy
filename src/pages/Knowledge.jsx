@@ -3,6 +3,7 @@ import mammoth from 'mammoth/mammoth.browser.js'
 import { supabase, plError } from '../supabase.js'
 import { applies, scopeLabel, LEVEL_LABEL } from '../knowledge.js'
 import { runJob } from '../jobs.js'
+import DrainLoader from '../components/DrainLoader.jsx'
 
 const plural = (n, one, few, many) => n === 1 ? one : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? few : many
 
@@ -200,7 +201,7 @@ export default function Knowledge({ profile }) {
   }, [data])
 
   if (error) return <section className="page"><h1>Księga wiedzy</h1><p className="error">{error}</p></section>
-  if (!data) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
+  if (!data) return <section className="page"><DrainLoader /></section>
 
   const count = s => data.facts.filter(f => f.status === s).length
   const shown = data.facts.filter(f => f.status === tab)

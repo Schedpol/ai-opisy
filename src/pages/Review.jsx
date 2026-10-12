@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { supabase, plError } from '../supabase.js'
 import { regenerateSections, generateVariants } from '../gen.js'
+import DrainLoader from '../components/DrainLoader.jsx'
 
 const STATUS = { generowanie: 'w trakcie', do_weryfikacji: 'do weryfikacji', poprawki: 'poprawiony', zaakceptowany: 'zaakceptowany', opublikowany: 'opublikowany', blad: 'błąd', do_generacji: 'do generacji' }
 const FILTERS = [['do_weryfikacji', 'Do weryfikacji'], ['zaakceptowany', 'Zaakceptowane'], ['blad', 'Błędy'], ['wszystkie', 'Wszystkie']]
@@ -25,7 +26,7 @@ function ReviewList() {
     for (const d of data || []) { const k = `${d.family_id}|${d.channel_id}|${d.product_id}`; if (!latest[k]) latest[k] = d }
     setRows(Object.values(latest).sort((a, b) => b.created_at.localeCompare(a.created_at)))
   })() }, [])
-  if (!rows || !lk) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
+  if (!rows || !lk) return <section className="page"><DrainLoader /></section>
   const shown = filter === 'wszystkie' ? rows : rows.filter(r => r.status === filter || (filter === 'do_weryfikacji' && r.status === 'generowanie'))
   return (
     <section className="page">
@@ -137,7 +138,7 @@ function ReviewDetail({ id, profile }) {
   }
 
   if (err && !d) return <section className="page"><p className="error">{err}</p></section>
-  if (!d || !lk) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
+  if (!d || !lk) return <section className="page"><DrainLoader /></section>
   const qa = d.qa || {}
   const blocks = sectionBlocks(tpl)
   const chosen = Object.keys(sel).filter(k => sel[k])

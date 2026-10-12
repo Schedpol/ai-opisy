@@ -6,15 +6,19 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 // Moduł publikacji działa jako osobny workflow – adres wyliczany z adresu głównego
 export const PUBLISH_URL = N8N_URL.replace('ai-opisy-zadania', 'ai-opisy-publikacja')
 
-// Aktywne zadania AI/n8n – logo w menu pokazuje, że coś się dzieje
+// Aktywne zadania AI/n8n – logo w menu i nakładka na środku ekranu pokazują, że coś się dzieje
 export const jobActivity = new EventTarget()
-let activeJobs = 0
-const setActive = d => { activeJobs = Math.max(0, activeJobs + d); jobActivity.dispatchEvent(new CustomEvent('change', { detail: activeJobs })) }
-export const activeJobCount = () => activeJobs
+const active = new Map()   // id → { type, stage, started }
+let seq = 0
+const emit = () => jobActivity.dispatchEvent(new CustomEvent('change', { detail: active.size }))
+export const activeJobCount = () => active.size
+export const activeJobList = () => [...active.values()]
 
-export async function runJob(...args) {
-  setActive(1)
-  try { return await runJobInner(...args) } finally { setActive(-1) }
+export async function runJob(jobType, payload, opts = {}) {
+  const id = ++seq
+  active.set(id, { type: jobType, mode: payload?.mode || null, lang: payload?.lang || null, stage: 'przygotowanie', started: Date.now() }); emit()
+  const onStage = st => { const j = active.get(id); if (j) { j.stage = st; emit() } opts.onStage?.(st) }
+  try { return await runJobInner(jobType, payload, { ...opts, onStage }) } finally { active.delete(id); emit() }
 }
 
 async function runJobInner(jobType, payload, { onStage, timeoutSec = 120, url = N8N_URL } = {}) {
