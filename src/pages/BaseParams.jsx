@@ -205,7 +205,7 @@ export default function BaseParams({ profile }) {
     })
   }, [d, lang])
   if (err) return <section className="page"><h1>Parametry w Base</h1><p className="error">{err}</p></section>
-  if (!d) return <section className="page"><p className="muted">Ładowanie…</p></section>
+  if (!d) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
 
   const active = d.mapping.filter(m => m.source !== 'pomin')
   const noRaw = d.rows.length > 0 && !d.rows.some(r => Array.isArray(r.raw))
@@ -305,7 +305,7 @@ export default function BaseParams({ profile }) {
           {admin && <button className="btn" disabled={!chosen.length || !!busy} onClick={() => run('write')}>Zapisz w Base</button>}
           {chosen.length > 0 && <button className="link-dark" onClick={() => setSel(new Set())}>odznacz</button>}
         </div>
-        {busy && <p className="muted" role="status">{busy}</p>}
+        {busy && <p className="muted working" role="status">{busy}</p>}
         <div className="table-wrap params-wrap"><table className="compact params-table">
           <thead><tr><th><input type="checkbox" checked={allSel} onChange={toggleAll} aria-label="Zaznacz wszystkie na liście" /></th><th>SKU</th>{active.map(m => { const n = lang !== 'pl' ? d.names[`${m.id}|${lang}`] : null; return <th key={m.id} title={lang !== 'pl' ? m.name : ''}>{lang === 'pl' ? m.name : (n?.status === 'zatwierdzone' ? n.name : <span className="tr-miss">{m.name} ⟂</span>)}</th> })}</tr></thead>
           <tbody>{list.slice(0, 300).map(r => (

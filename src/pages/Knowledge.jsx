@@ -138,7 +138,7 @@ function Documents({ ctx, docs, onDone }) {
             {ctx.brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
           <label>Plik DOCX<input type="file" accept=".docx" onChange={upload} disabled={!!stage} /></label>
         </div>
-        {stage && <p className="muted" role="status">{stage}</p>}
+        {stage && <p className="muted working" role="status">{stage}</p>}
         {err && <p className="error" role="alert">{err}</p>}
         {result && (
           <div className="extract-result">
@@ -200,7 +200,7 @@ export default function Knowledge({ profile }) {
   }, [data])
 
   if (error) return <section className="page"><h1>Księga wiedzy</h1><p className="error">{error}</p></section>
-  if (!data) return <section className="page"><p className="muted">Ładowanie…</p></section>
+  if (!data) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
 
   const count = s => data.facts.filter(f => f.status === s).length
   const shown = data.facts.filter(f => f.status === tab)

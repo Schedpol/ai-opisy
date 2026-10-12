@@ -48,7 +48,7 @@ export default function App() {
       </main>
     )
   }
-  if (session === undefined) return <main className="center-screen"><p className="muted">Ładowanie…</p></main>
+  if (session === undefined) return <main className="center-screen"><p className="muted working" role="status">Ładowanie…</p></main>
   if (!session) return <Login />
 
   const soon = (title, stage) => <Soon title={title} stage={stage} />

@@ -113,7 +113,7 @@ export default function ImportPanel({ brands, rules, existingSkus, onSaved, onCl
           </label>
         </div>
       )}
-      {stage && <p className="muted">{stage}</p>}
+      {stage && <p className="muted working" role="status">{stage}</p>}
       {warning && <p className="hint" role="status">{warning}</p>}
       {error && <p className="error" role="alert">{error}</p>}
 

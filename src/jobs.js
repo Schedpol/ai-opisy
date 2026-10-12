@@ -6,7 +6,18 @@ const sleep = ms => new Promise(r => setTimeout(r, ms))
 // Moduł publikacji działa jako osobny workflow – adres wyliczany z adresu głównego
 export const PUBLISH_URL = N8N_URL.replace('ai-opisy-zadania', 'ai-opisy-publikacja')
 
-export async function runJob(jobType, payload, { onStage, timeoutSec = 120, url = N8N_URL } = {}) {
+// Aktywne zadania AI/n8n – logo w menu pokazuje, że coś się dzieje
+export const jobActivity = new EventTarget()
+let activeJobs = 0
+const setActive = d => { activeJobs = Math.max(0, activeJobs + d); jobActivity.dispatchEvent(new CustomEvent('change', { detail: activeJobs })) }
+export const activeJobCount = () => activeJobs
+
+export async function runJob(...args) {
+  setActive(1)
+  try { return await runJobInner(...args) } finally { setActive(-1) }
+}
+
+async function runJobInner(jobType, payload, { onStage, timeoutSec = 120, url = N8N_URL } = {}) {
   if (!url) throw new Error('Brakuje adresu n8n (zmienna VITE_N8N_WEBHOOK_URL).')
   const { data: { session } } = await supabase.auth.getSession()
   const ins = await supabase.from('jobs').insert({ job_type: jobType, payload, created_by: session.user.id }).select('id').single()

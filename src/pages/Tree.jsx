@@ -85,7 +85,7 @@ function Upload({ last, onDone }) {
       <details open={isOpen} onToggle={e => setIsOpen(e.currentTarget.open)}><summary className="muted small">Jaki plik wgrać?</summary>
         <p className="muted small">Eksport z PIM (CSV, TSV albo XLSX) – struktura drzewa powstanie ze ścieżki kategorii PIM. Działa też CSV z Baselinkera. Lista służy tylko do podglądu pokrycia i nie tworzy produktów do generowania opisów. Nowy plik zastępuje poprzednią listę.</p>
       </details>
-      {busy && <p className="muted" role="status">{busy}</p>}
+      {busy && <p className="muted working" role="status">{busy}</p>}
       {msg && <p className={msg.type} role="status">{msg.text}</p>}
     </div>
   )
@@ -199,7 +199,7 @@ export default function Tree() {
 
   if (err) return <section className="page"><h1>Drzewo produktów</h1><p className="error">{err}</p>
     {/column|kolumn/i.test(err) && <p className="hint">Wygląda na to, że baza nie ma nowych kolumn. Uruchom w Supabase migracje 10_asortyment_pim.sql i 11_jakosc_pim.sql, potem odśwież stronę.</p>}</section>
-  if (!d) return <section className="page"><p className="muted">Ładowanie…</p></section>
+  if (!d) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
   const toggle = k => { const n = new Set(open); n.has(k) ? n.delete(k) : n.add(k); setOpen(n) }
   const last = d.as.length ? { at: d.as.reduce((m, r) => r.uploaded_at > m ? r.uploaded_at : m, d.as[0].uploaded_at), count: d.as.length, pim: d.as.some(r => r.source === 'pim') } : null
   const sortKeys = o => Object.keys(o).sort((a, b) => (a === '—') - (b === '—') || a.localeCompare(b, 'pl'))

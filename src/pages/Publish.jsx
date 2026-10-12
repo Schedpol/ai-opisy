@@ -33,7 +33,7 @@ export default function Publish({ profile }) {
   }
   useEffect(() => { load() }, [])
 
-  if (!data) return <section className="page"><p className="muted">Ładowanie…</p></section>
+  if (!data) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
   const ch = data.channels.find(c => c.id === channel)
   const inCh = data.rows.filter(r => r.channel_id === channel)
   const lists = {

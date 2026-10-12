@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import HelpDrawer from '../help/HelpDrawer.jsx'
+import { jobActivity, activeJobCount } from '../jobs.js'
 import { supabase, ROLE_LABELS } from '../supabase.js'
 
 const NAV = [
@@ -20,13 +21,16 @@ const NAV = [
 
 export default function Layout({ profile }) {
   const [help, setHelp] = useState(false)
+  const [working, setWorking] = useState(activeJobCount())
+  useEffect(() => { const f = e => setWorking(e.detail); jobActivity.addEventListener('change', f); return () => jobActivity.removeEventListener('change', f) }, [])
   const loc = useLocation()
   return (
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <span className="brand-mark" aria-hidden="true" />
-          <span>AI Opisy</span>
+          <span className={working ? 'brand-mark flowing' : 'brand-mark'} aria-hidden="true"><i /><i /><i /><i /><i /></span>
+          <span className="sr-only" role="status">{working ? 'Trwa zadanie AI' : ''}</span>
+          <span title={working ? `Trwa zadanie AI (${working})` : undefined}>AI Opisy</span>
         </div>
         <nav aria-label="Główna nawigacja">
           {NAV.map(n => (

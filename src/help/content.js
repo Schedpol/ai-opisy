@@ -16,7 +16,7 @@ Role dziedziczą uprawnienia w górę: akceptujący może wszystko, co generują
 
   { id: 'przeplyw', title: 'Jak przebiega praca', diagram: true, md: `Opis powstaje z czterech źródeł (dane produktu, wiedza, frazy, szablon), a do Base trafia dopiero po akceptacji człowieka. Parametry produktów idą do Base osobną ścieżką, prosto z danych PIM.
 
-Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne opisy powstają w minutach. Jeśli weryfikujący odrzuci opis, wraca on do ponownej generacji, a powtarzające się uwagi warto zamieniać w reguły QA.` },
+Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne opisy powstają w minutach. Gdy przez szczeliny logo w menu „spływa woda”, trwa zadanie AI (generacja, tłumaczenie, porównanie z Base) – wynik pojawi się na ekranie, z którego zostało uruchomione. Jeśli weryfikujący odrzuci opis, wraca on do ponownej generacji, a powtarzające się uwagi warto zamieniać w reguły QA.` },
 
   { id: 'ekrany', title: 'Ekrany aplikacji', md: `Ekrany są ułożone w menu w kolejności pracy: od danych produktu, przez wiedzę i szablony, do weryfikacji i publikacji.
 

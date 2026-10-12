@@ -52,7 +52,7 @@ export default function Products() {
   }
 
   if (error) return <section className="page"><h1>Produkty</h1><p className="error">{error}</p></section>
-  if (!data) return <section className="page"><p className="muted">Ładowanie…</p></section>
+  if (!data) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
 
   const brandName = id => data.brands.find(b => b.id === id)?.name || ''
   const orphans = data.products.filter(p => !p.family_id)

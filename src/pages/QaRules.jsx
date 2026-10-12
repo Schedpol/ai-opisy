@@ -55,7 +55,7 @@ export default function QaRules({ profile }) {
   async function edit(r, pattern) { if (pattern.trim() && pattern !== r.pattern) { await supabase.from('qa_rules').update({ pattern: pattern.trim() }).eq('id', r.id); load() } }
   async function remove(r) { if (confirm('Usunąć regułę?')) { await supabase.from('qa_rules').delete().eq('id', r.id); load() } }
 
-  if (!rules) return <section className="page"><p className="muted">Ładowanie…</p></section>
+  if (!rules) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
   const groups = [['propozycja', 'Propozycje do zatwierdzenia'], ['aktywna', 'Aktywne'], ['wylaczona', 'Wyłączone']]
   const active = rules.filter(r => r.status === 'aktywna' && r.rule_type !== 'instrukcja' && r.rule_type !== 'limit')
   const hits = test.trim() ? active.filter(r => { try { return new RegExp(r.pattern, 'i').test(test) } catch { return false } }) : []

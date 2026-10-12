@@ -95,7 +95,7 @@ function Bank({ bank, onChanged, canVerify }) {
           <p className="muted small">Frazy startowe sprawdź z osobą znającą język – to od nich zależy cała pula.</p>
           <button className="btn" onClick={refresh} disabled={!!stage || !seedList.length}>{stage ? 'Odświeżanie…' : 'Odśwież frazy'}</button>
           {seedsDirty && !stage && <button className="link-dark gap" onClick={() => patch({ seeds: seedList, min_volume: Number(minVol) }, 'Zapisano frazy startowe.')}>Zapisz bez odświeżania</button>}
-          {stage && <p className="muted" role="status">{stage}</p>}
+          {stage && <p className="muted working" role="status">{stage}</p>}
           {msg && <p className={msg.type} role="status">{msg.text}</p>}
         </div>
         <div>
@@ -143,7 +143,7 @@ export default function Keywords({ profile }) {
   }
   useEffect(() => { load() }, [])
   if (err) return <section className="page"><h1>Frazy kluczowe</h1><p className="error">{err}</p></section>
-  if (!banks) return <section className="page"><p className="muted">Ładowanie…</p></section>
+  if (!banks) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
   const order = { ro: 1, hu: 2, bg: 3 }
   return (
     <section className="page wide">

@@ -111,7 +111,7 @@ function TemplateEditor({ profile, templateId, crumbs }) {
     setBusy(false); if (!error) load(current.id)
   }
 
-  if (!list) return <section className="page"><p className="muted">Ładowanie…</p></section>
+  if (!list) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
   if (!current) return <section className="page wide">{crumbs}<p className="error">Nie znaleziono szablonu.</p></section>
   const label = t => { const c = names.c.find(x => x.id === t.channel_id); const b = names.b.find(x => x.id === t.brand_id); return `${b?.name || ''} · ${c ? `${c.marketplace} ${c.language.toUpperCase()}` : ''} · ${t.category || 'domyślny'}` }
 
@@ -322,7 +322,7 @@ export default function Templates({ profile }) {
     setD({ templates: t.data || [], channels: c.data || [], brands: b.data || [], families: f.data || [] })
   }
   useEffect(() => { load() }, [])
-  if (!d) return <section className="page"><p className="muted">Ładowanie…</p></section>
+  if (!d) return <section className="page"><p className="muted working" role="status">Ładowanie…</p></section>
 
   const channel = d.channels.find(c => c.id === chId)
   const tpl = d.templates.find(t => t.id === tid)
