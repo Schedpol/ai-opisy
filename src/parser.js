@@ -164,6 +164,10 @@ export function parseModel(name) {
 // Wykończenie i powłoka wyliczone z samego SKU (dla produktów, których nie ma jeszcze w aplikacji)
 export function skuAttributes(sku, brandId, rules, category, shape) {
   const a = {}
+  // kształt: reguła słownika (np. kod bazowy → pięciokątny) ma pierwszeństwo przed polem PIM
+  const sh = ruleFor(rules, brandId, 'ksztalt', sku)
+  if (sh) a.ksztalt = sh.value
+  shape = a.ksztalt || shape
   const drain = ruleFor(rules, brandId, 'odplyw', sku)
   if (drain && shape === 'prostokątny') a.odplyw = drain.value   // jak przy imporcie: odpływ tylko dla prostokątów
   let fin = ruleFor(rules, brandId, 'wykonczenie', sku)

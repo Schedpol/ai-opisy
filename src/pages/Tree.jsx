@@ -203,7 +203,7 @@ export default function Tree() {
       const catKey = cats.join(' ').toLowerCase()
       const attrs = { ...skuAttributes(r.sku, brandId, d.rules, catKey, r.shape), ...(p?.attributes || {}) }
       const dims = (attrs.wymiar || (String(r.name || p?.name || '').match(/(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/) || []).slice(1, 3).join('x')).replace(/\s+/g, '')
-      flatItems.push({ ...r, p, sts, descId, levels: [r.outside ? 'Spoza listy PIM' : cats.join(' › '), title(r.technology), model, attrs.wykonczenie || title(r.color), dims ? `${dims} cm` : '', attrs.odplyw || ''] })
+      flatItems.push({ ...r, p, sts, descId, levels: [r.outside ? 'Spoza listy PIM' : cats.join(' › '), title(r.technology), model, attrs.wykonczenie || title(r.color), attrs.ksztalt || r.shape || '', dims ? `${dims} cm` : '', attrs.odplyw || ''] })
     }
     const flat = n => [...n.items, ...Object.values(n.children).flatMap(flat)]
     const count = n => { const all = flat(n); return { total: all.length, done: all.filter(x => x.sts[channel] === 'opublikowany').length, issues: all.filter(x => x.issues?.length).length } }

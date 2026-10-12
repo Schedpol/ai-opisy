@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-// Diagram asortymentu: kategoria → technologia → model → kolor → rozmiar → odpływ → SKU.
+// Diagram asortymentu: kategoria → technologia → model → kolor → kształt → rozmiar → odpływ → SKU.
 // Puste poziomy są pomijane (np. odpływy liniowe nie mają „umiejscowienia odpływu”).
-export const LEVELS = ['Kategoria', 'Technologia', 'Model', 'Kolor', 'Rozmiar', 'Odpływ']
+export const LEVELS = ['Kategoria', 'Technologia', 'Model', 'Kolor', 'Kształt', 'Rozmiar', 'Odpływ']
+const SKU_COL = LEVELS.length + 1
 const COL = 236, NODE_W = 200, NODE_H = 46, ROW = 56, PAD_X = 16, PAD_Y = 40
 const STATUS = {
   opublikowany: { label: 'opublikowany', cls: 'st-pub' }, zaakceptowany: { label: 'zaakceptowany', cls: 'st-acc' },
@@ -53,7 +54,7 @@ export default function TreeDiagram({ items, channel, channelLabel }) {
     const place = (n, depthCol) => {
       const col = n.level + 1
       maxCol = Math.max(maxCol, col)
-      const kids = open.has(n.id) ? [...n.kids, ...(n.skus.length ? [{ id: n.id + '|sku', sku: true, list: n.skus, level: 6 }] : [])] : []
+      const kids = open.has(n.id) ? [...n.kids, ...(n.skus.length ? [{ id: n.id + '|sku', sku: true, list: n.skus, level: LEVELS.length }] : [])] : []
       let y
       if (!kids.length) { y = row * ROW; row += n.sku ? n.list.length : 1 }
       else {
@@ -62,7 +63,7 @@ export default function TreeDiagram({ items, channel, channelLabel }) {
         kids.forEach((k, i) => k.sku ? k.list.forEach((it, j) => links.push({ from: n, to: { sku: true, id: k.id + it.sku }, y1: y, y2: k.y0 + j * ROW })) : links.push({ from: n, to: k, y1: y, y2: ys[i] }))
       }
       n.y = y; n.x = col * COL
-      if (n.sku) { n.y0 = y; maxCol = Math.max(maxCol, 7); n.x = 7 * COL; n.list.forEach((it, i) => nodes.push({ sku: true, it, x: n.x, y: y + i * ROW, id: n.id + it.sku })) }
+      if (n.sku) { n.y0 = y; maxCol = Math.max(maxCol, SKU_COL); n.x = SKU_COL * COL; n.list.forEach((it, i) => nodes.push({ sku: true, it, x: n.x, y: y + i * ROW, id: n.id + it.sku })) }
       else nodes.push(n)
       if (n.sku) n.y = y + ((n.list.length - 1) * ROW) / 2
       return n.sku ? y + ((n.list.length - 1) * ROW) / 2 : y
@@ -73,7 +74,7 @@ export default function TreeDiagram({ items, channel, channelLabel }) {
 
   const cov = n => { const total = n.all.length, done = n.all.filter(x => x.sts[channel] === 'opublikowany').length; return { total, done, pct: total ? done / total : 0 } }
   const linkPath = l => {
-    const x1 = l.from.x + NODE_W + PAD_X, x2 = (l.to.sku ? 7 * COL : l.to.x) + PAD_X, y1 = l.y1 + PAD_Y + NODE_H / 2, y2 = l.y2 + PAD_Y + NODE_H / 2, mx = (x1 + x2) / 2
+    const x1 = l.from.x + NODE_W + PAD_X, x2 = (l.to.sku ? SKU_COL * COL : l.to.x) + PAD_X, y1 = l.y1 + PAD_Y + NODE_H / 2, y2 = l.y2 + PAD_Y + NODE_H / 2, mx = (x1 + x2) / 2
     return `M${x1} ${y1}C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`
   }
 
@@ -108,7 +109,7 @@ export default function TreeDiagram({ items, channel, channelLabel }) {
             const c = cov(n), isOpen = open.has(n.id), hasKids = n.kids?.length || n.skus?.length
             // krótsza etykieta: nagłówek kolumny mówi, co to za poziom; pełna nazwa w podpowiedzi
             let short = n.label
-            if (n.level === 5) short = short.replace(/^odpływ\s+/i, '')
+            if (n.level === 6) short = short.replace(/^odpływ\s+/i, '')
             if (n.level === 3) short = short.replace(/\s*\(.*?\)\s*/g, ' ').trim()
             const label = short.length > 22 ? short.slice(0, 21).trimEnd() + '…' : short
             return (
