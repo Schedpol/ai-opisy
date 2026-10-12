@@ -23,7 +23,7 @@ Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne 
 | Ekran | Do czego służy | Kto |
 | --- | --- | --- |
 | [Dashboard](/) | pokrycie asortymentu (PIM → Baselinker → aplikacja → treść → publikacja) z listami braków do pobrania, panel „Od czego zacząć”, statusy opisów, jakość | wszyscy; stan Baselinkera odświeża akceptujący |
-| [Drzewo produktów](/drzewo) | lista asortymentu z PIM w strukturze marka › kategoria › model › SKU, pokrycie opisami per rynek, raport jakości danych PIM | wszyscy; wgrywa listę admin |
+| [Drzewo produktów](/drzewo) | asortyment z PIM jako **lista** (marka › kategoria › model › SKU) albo **diagram** (kategoria › technologia › model › kolor › rozmiar › odpływ › SKU), pokrycie opisami per rynek, raport jakości danych PIM | wszyscy; wgrywa listę admin |
 | [Produkty](/produkty) | import z Baselinkera, rodziny (modele), wybór wariantu wiodącego, generacja opisu bazowego | generujący |
 | [Słownik importu](/slownik) | reguły odczytu atrybutów z SKU: kolor (np. B/SC = Black Scale), powłoka (AP1), odpływ, kształt, zestaw z nośnikiem (/NO), role zdjęć | admin |
 | [Księga wiedzy](/wiedza) | fakty o markach, technologiach, seriach i modelach; wgrywanie DOCX z automatycznym wyciąganiem faktów | dodaje generujący, zatwierdza akceptujący |
@@ -116,7 +116,8 @@ Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne 
 
 // Pomoc kontekstowa: krótko, co robić na danym ekranie + link do właściwej części instrukcji
 export const SCREEN_HELP = [
-  { path: '/drzewo', title: 'Drzewo produktów', section: 'ekrany', md: `- **Wgraj nową listę** – eksport z PIM (CSV, TSV, XLSX), najlepiej bez otwierania w Excelu.
+  { path: '/drzewo', title: 'Drzewo produktów', section: 'ekrany', md: `- **Lista | Diagram** – diagram pokazuje rozgałęzienie: kategoria › technologia › model › kolor › rozmiar › odpływ › SKU. Kliknij węzeł, żeby rozwinąć kolejny poziom; „Rozwiń do poziomu” otwiera całe drzewo do wybranej kolumny. Poziomy bez danych (np. odpływ dla nośników) są pomijane.
+- **Wgraj nową listę** – eksport z PIM (CSV, TSV, XLSX), najlepiej bez otwierania w Excelu.
 - Pasek przy gałęzi = opublikowane w wybranym kanale / wszystkie SKU. Kliknij status przy SKU, żeby otworzyć opis.
 - **Jakość danych PIM** – rozbieżności w danych (kształt, kolor, EAN, wymiary); pobierz raport CSV i przekaż osobie od danych.` },
   { path: '/produkty', title: 'Produkty', section: 'opis-nowego-modelu-na-istniejacym-rynku', md: `- **Importuj z Baselinkera** – w podglądzie sprawdź kolumnę „Uwagi” przed zapisem.

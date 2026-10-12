@@ -556,3 +556,34 @@ p.ok::before { content: '✓'; position: absolute; left: 0; top: .1em; width: 18
 .small-btn { padding: 5px 12px; font-size: 13px; }
 @media (max-width: 1100px) { .dash-top { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .cov-steps li { grid-template-columns: 1fr auto; } .cov-bar, .cov-note { grid-column: 1 / -1; } }
+
+/* Drzewo: widok diagramu */
+.view-seg { margin-right: 6px; }
+.diagram-panel { padding: 14px 0 0; }
+.diagram-tools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 0 18px 10px; border-bottom: 1px solid var(--line); }
+.diagram-legend { margin-left: auto; display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 6px; }
+.dot.st-pub { background: var(--ok); } .dot.st-acc { background: var(--action); } .dot.st-rev { background: #D9922E; } .dot.st-none { background: #B9C0CC; }
+.diagram-scroll { overflow: auto; max-height: 75vh; position: relative; }
+.diagram-cols { position: sticky; top: 0; z-index: 2; height: 30px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.diagram-cols span { position: absolute; top: 7px; font-size: 12px; font-weight: 600; color: var(--ink-soft); }
+.tree-diagram { display: block; font-size: 13px; }
+.tree-diagram .links path { fill: none; stroke: #C8D0DD; stroke-width: 1.4; transition: d .35s var(--ease-water); }
+.dnode { transition: transform .35s var(--ease-water); animation: node-in .3s ease both; }
+.dnode[tabindex="0"] { cursor: pointer; }
+.dnode rect:first-child { fill: var(--surface); stroke: #C8D0DD; stroke-width: 1.2; transition: stroke .15s, fill .15s; }
+.dnode[tabindex="0"]:hover rect:first-child, .dnode:focus-visible rect:first-child { stroke: var(--action); }
+.dnode:focus { outline: none; } .dnode:focus-visible rect:first-child { stroke-width: 2.2; }
+.dnode.open rect:first-child { fill: #F2F6FC; stroke: #9DB2D6; }
+.dnode.root rect:first-child { fill: var(--ink); stroke: var(--ink); } .dnode.root .d-label, .dnode.root .d-caret { fill: #fff; } .dnode.root .d-meta { fill: #C9D3EA; }
+.d-label { font-weight: 600; fill: var(--ink); font-size: 13px; }
+.d-meta { fill: var(--ink-soft); font-size: 11.5px; }
+.d-caret { fill: var(--action); font-size: 17px; font-weight: 700; text-anchor: middle; }
+.d-bar-bg { fill: #E4E8EF; } .d-bar { fill: var(--ok); }
+.dnode.root .d-bar-bg { fill: #2A3B66; }
+.dnode.sku rect:first-child { fill: #FBFCFE; }
+.sku-dot { fill: #B9C0CC; }
+.dnode.st-pub .sku-dot { fill: var(--ok); } .dnode.st-acc .sku-dot { fill: var(--action); } .dnode.st-rev .sku-dot { fill: #D9922E; } .dnode.st-err .sku-dot { fill: var(--error, #B42318); }
+a .dnode.sku:hover rect:first-child { stroke: var(--action); }
+@keyframes node-in { from { opacity: 0 } to { opacity: 1 } }
+@media (prefers-reduced-motion: reduce) { .dnode, .tree-diagram .links path { transition: none; animation: none; } }

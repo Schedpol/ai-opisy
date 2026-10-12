@@ -162,8 +162,10 @@ export function parseModel(name) {
 }
 
 // Wykończenie i powłoka wyliczone z samego SKU (dla produktów, których nie ma jeszcze w aplikacji)
-export function skuAttributes(sku, brandId, rules, category) {
+export function skuAttributes(sku, brandId, rules, category, shape) {
   const a = {}
+  const drain = ruleFor(rules, brandId, 'odplyw', sku)
+  if (drain && shape === 'prostokątny') a.odplyw = drain.value   // jak przy imporcie: odpływ tylko dla prostokątów
   let fin = ruleFor(rules, brandId, 'wykonczenie', sku)
   if (fin && fin.match_type === 'suffix' && fin.pattern === '' && !/^(brodziki|wanny)/.test(String(category || ''))) fin = null
   if (fin) a.wykonczenie = fin.value

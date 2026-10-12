@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Papa from 'papaparse'
 import { supabase, plError } from '../supabase.js'
-import { parseModel } from '../parser.js'
+import { parseModel, skuAttributes } from '../parser.js'
+import TreeDiagram from '../components/TreeDiagram.jsx'
 import { decodeBytes, repairTable, isPim, rowsFromPim, RULES } from '../pim.js'
 import DrainLoader from '../components/DrainLoader.jsx'
 
@@ -146,22 +147,25 @@ export default function Tree() {
   const [onlyIssues, setOnlyIssues] = useState(false)
   const [rule, setRule] = useState('')
   const [open, setOpen] = useState(new Set())
+  const [view, setView] = useState(() => { try { return localStorage.getItem('drzewo-widok') || 'lista' } catch { return 'lista' } })
+  const pickView = v => { setView(v); try { localStorage.setItem('drzewo-widok', v) } catch {} }
 
   async function load() {
     const fetchAll = async (table, cols) => { let out = [], from = 0; for (;;) { const { data, error } = await supabase.from(table).select(cols).range(from, from + 999); if (error) throw error; out = out.concat(data); if (data.length < 1000) return out; from += 1000 } }
     try {
-      const [as, pr, fam, ch, ds, rl] = await Promise.all([
-        fetchAll('assortment', 'sku, name, brand, category, category_path, model, color, shape, technology, source, issues, uploaded_at'), fetchAll('products', 'id, sku, name, family_id'),
+      const [as, pr, fam, ch, ds, rl, br] = await Promise.all([
+        fetchAll('assortment', 'sku, name, brand, category, category_path, model, color, shape, technology, source, issues, uploaded_at'), fetchAll('products', 'id, sku, name, family_id, attributes'),
         fetchAll('product_families', 'id, model_name'), supabase.from('channels').select('id, marketplace, language').eq('active', true),
         fetchAll('descriptions', 'id, channel_id, product_id, version, status'),
-        supabase.from('import_rules').select('pattern, value, match_type, active').eq('attribute', 'rodzina'),
+        supabase.from('import_rules').select('*'),
+        supabase.from('brands').select('id, name'),
       ])
       const order = { ro: 1, hu: 2, bg: 3 }
       const channels = (ch.data || []).sort((a, b) => (order[a.language] || 9) - (order[b.language] || 9))
       const latest = {}
       for (const x of ds.sort((a, b) => b.version - a.version)) { const k = `${x.channel_id}|${x.product_id}`; if (!latest[k]) latest[k] = x }
-      const setRules = (rl.data || []).filter(r => r.active !== false && r.match_type === 'segment')
-      setD({ as, products: Object.fromEntries(pr.map(p => [p.sku, p])), fam: Object.fromEntries(fam.map(f => [f.id, f.model_name])), channels, latest, setRules })
+      const setRules = (rl.data || []).filter(r => r.attribute === 'rodzina' && r.active !== false && r.match_type === 'segment')
+      setD({ as, products: Object.fromEntries(pr.map(p => [p.sku, p])), fam: Object.fromEntries(fam.map(f => [f.id, f.model_name])), channels, latest, setRules, rules: rl.data || [], brands: br?.data || [] })
       setChannel(c => c || channels[0]?.id || '')
     } catch (e) { setErr(plError(e.message)) }
   }
@@ -172,6 +176,8 @@ export default function Tree() {
     const status = (p, chId) => { if (!p) return 'poza_aplikacja'; const x = d.latest[`${chId}|${p.id}`]; return x ? x.status : 'brak_opisu' }
     const ql = q.trim().toLowerCase()
     const root = { children: {}, items: [] }
+    const flatItems = []
+    const title = x => String(x || '').trim().toLowerCase().replace(/(^|\s)\p{L}/gu, m => m.toUpperCase())
     let total = 0, inApp = 0
     const perCh = Object.fromEntries(d.channels.map(c => [c.id, 0]))
     const put = (path, item) => { let n = root; for (const k of path) n = (n.children[k] ||= { children: {}, items: [] }); n.items.push(item) }
@@ -192,10 +198,16 @@ export default function Tree() {
       const pimModel = r.model ? (set ? `${r.model} + ${set.value}` : r.model) : null
       const model = (p && d.fam[p.family_id]) || pimModel || '(bez modelu)'
       put([r.outside ? '—' : (r.brand || '(bez marki)'), ...cats, model], { ...r, p, sts, descId })
+      // poziomy diagramu: kategoria, technologia, model, kolor, rozmiar, odpływ
+      const brandId = d.brands.find(b => b.name.toLowerCase() === String(r.brand || '').toLowerCase())?.id || null
+      const catKey = cats.join(' ').toLowerCase()
+      const attrs = { ...skuAttributes(r.sku, brandId, d.rules, catKey, r.shape), ...(p?.attributes || {}) }
+      const dims = (attrs.wymiar || (String(r.name || p?.name || '').match(/(\d+(?:[.,]\d+)?)\s*x\s*(\d+(?:[.,]\d+)?)/) || []).slice(1, 3).join('x')).replace(/\s+/g, '')
+      flatItems.push({ ...r, p, sts, descId, levels: [r.outside ? 'Spoza listy PIM' : cats.join(' › '), title(r.technology), model, attrs.wykonczenie || title(r.color), dims ? `${dims} cm` : '', attrs.odplyw || ''] })
     }
     const flat = n => [...n.items, ...Object.values(n.children).flatMap(flat)]
     const count = n => { const all = flat(n); return { total: all.length, done: all.filter(x => x.sts[channel] === 'opublikowany').length, issues: all.filter(x => x.issues?.length).length } }
-    return { root, total, inApp, perCh, count, outside: outside.length }
+    return { root, total, inApp, perCh, count, outside: outside.length, flatItems }
   }, [d, q, onlyMissing, onlyIssues, rule, channel])
 
   if (err) return <section className="page"><h1>Drzewo produktów</h1><p className="error">{err}</p>
@@ -256,19 +268,21 @@ export default function Tree() {
           </div>
           <QualityReport rows={d.as} rule={rule} setRule={r => { setRule(r); if (r) setOnlyIssues(true) }} />
           <div className="tree-tools">
+            <div className="seg view-seg" role="group" aria-label="Widok"><button className={view === 'lista' ? 'seg-btn on' : 'seg-btn'} onClick={() => pickView('lista')}>Lista</button><button className={view === 'diagram' ? 'seg-btn on' : 'seg-btn'} onClick={() => pickView('diagram')}>Diagram</button></div>
             <div className="seg">{d.channels.map(c => <button key={c.id} className={c.id === channel ? 'seg-btn on' : 'seg-btn'} onClick={() => setChannel(c.id)}>{c.marketplace} {c.language.toUpperCase()}</button>)}</div>
             <input className="tree-search" placeholder="Szukaj SKU albo nazwy…" value={q} onChange={e => setQ(e.target.value)} aria-label="Szukaj" />
             <label className="check small"><input type="checkbox" checked={onlyMissing} onChange={e => setOnlyMissing(e.target.checked)} /> tylko nieopublikowane</label>
             <label className="check small"><input type="checkbox" checked={onlyIssues} onChange={e => setOnlyIssues(e.target.checked)} /> tylko z uwagami PIM{rule ? ` (${RULES[rule]})` : ''}</label>
-            <button className="link-dark" onClick={() => setOpen(new Set(allKeys()))}>Rozwiń wszystko</button>
-            <button className="link-dark" onClick={() => setOpen(new Set())}>Zwiń</button>
+            {view === 'lista' && <><button className="link-dark" onClick={() => setOpen(new Set(allKeys()))}>Rozwiń wszystko</button>
+            <button className="link-dark" onClick={() => setOpen(new Set())}>Zwiń</button></>}
           </div>
           <p className="muted small">Pasek i licznik przy każdej gałęzi: opublikowane w wybranym kanale / wszystkie SKU. Kliknij status przy SKU, żeby otworzyć opis.</p>
           {tree.outside > 0 && <p className="hint">{tree.outside} SKU jest w aplikacji, ale nie ma ich na liście asortymentu – znajdziesz je w gałęzi „Produkty w aplikacji spoza listy”. Sprawdź, czy lista z PIM jest kompletna.</p>}
+          {view === 'diagram' ? (tree.flatItems.length ? <TreeDiagram items={tree.flatItems} channel={channel} channelLabel={(c => c ? `${c.marketplace} ${c.language.toUpperCase()}` : '')(d.channels.find(c => c.id === channel))} /> : <div className="panel"><p className="muted">Nic nie pasuje do filtrów.</p></div>) : (
           <div className="panel tree">
             {Object.keys(tree.root.children).length === 0 ? <p className="muted">Nic nie pasuje do filtrów.</p>
               : sortKeys(tree.root.children).map(b => <Node key={b} k={b} label={b === '—' ? 'Produkty w aplikacji spoza listy' : b} node={tree.root.children[b]} level={0} />)}
-          </div>
+          </div>)}
         </>
       )}
     </section>
