@@ -1,4 +1,12 @@
 import { useState } from 'react'
+
+// Logo z folderu public/ (najpierw SVG, potem PNG); bez pliku – nazwa tekstem
+const LOGOS = ['schedpol-logo.svg', 'schedpol-logo.png'].map(f => `${import.meta.env.BASE_URL}${f}`)
+function Logo() {
+  const [i, setI] = useState(0)
+  if (i >= LOGOS.length) return <span className="login-logo-text">Schedpol</span>
+  return <img className="login-logo" src={LOGOS[i]} alt="Schedpol" onError={() => setI(i + 1)} />
+}
 import { supabase, plError } from '../supabase.js'
 
 export default function Login() {
@@ -17,11 +25,16 @@ export default function Login() {
 
   return (
     <main className="login">
-      <section className="login-side" aria-hidden="true">
-        <div className="drain">
+      <section className="login-side">
+        <div className="login-water" aria-hidden="true">
+          <span className="caustic c1" /><span className="caustic c2" />
+          <span className="drop d1" /><span className="drop d2" /><span className="drop d3" /><span className="drop d4" /><span className="drop d5" /><span className="drop d6" />
+        </div>
+        <Logo />
+        <div className="drain" aria-hidden="true">
           <span /><span /><span /><span /><span /><span /><span />
         </div>
-        <p className="login-claim">Opisy produktów na eMAG RO, HU i BG z jednej księgi wiedzy.</p>
+        <p className="login-claim"><span className="claim-name">SchedpolAI</span> <span className="claim-desc">Generator Treści</span></p>
       </section>
       <section className="login-form">
         <form onSubmit={submit} className="panel narrow" noValidate>

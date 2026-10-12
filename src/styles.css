@@ -475,3 +475,57 @@ p.ok::before { content: '✓'; position: absolute; left: 0; top: .1em; width: 18
   .drain-grate i::after, .job-overlay, .job-card { animation: none !important; }
   .drain-grate i::after { top: 0; opacity: .6; }
 }
+
+/* ===== Logowanie: logo, hasło i woda w tle ===== */
+.login-side { position: relative; overflow: hidden; isolation: isolate; }
+.login-side > *:not(.login-water) { position: relative; z-index: 1; }
+.login-logo, .login-logo-text { margin-bottom: auto; align-self: flex-start; }
+.login-logo { height: 44px; width: auto; max-width: 220px; object-fit: contain; }
+.login-logo-text { font-size: 26px; font-weight: 700; letter-spacing: -.01em; color: #fff; }
+.login-claim { display: flex; flex-direction: column; gap: 6px; max-width: none; }
+.claim-name { font-size: 40px; line-height: 1.05; font-weight: 700; letter-spacing: -.02em; color: #fff; }
+.claim-desc { font-size: 22px; line-height: 1.2; font-weight: 400; color: #C9D3EA; }
+
+/* Lustro wody: wolno przesuwające się refleksy światła */
+.login-water { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.caustic { position: absolute; width: 70%; aspect-ratio: 1; border-radius: 50%; filter: blur(40px); opacity: .22; }
+.caustic.c1 { left: -15%; top: 10%; background: radial-gradient(circle, #2E6FB8 0, transparent 65%); animation: drift-a 22s ease-in-out infinite alternate; }
+.caustic.c2 { right: -20%; bottom: 5%; background: radial-gradient(circle, #3C8FD4 0, transparent 65%); animation: drift-b 28s ease-in-out infinite alternate; }
+@keyframes drift-a { to { transform: translate(18%, 22%) scale(1.15); } }
+@keyframes drift-b { to { transform: translate(-22%, -16%) scale(.9); } }
+
+/* Krople: spadają na wspólne lustro wody nad kratką i rozchodzą się podwójnym kręgiem (spłaszczonym w perspektywie) */
+.drop { position: absolute; top: -16px; width: 8px; height: 12px; border-radius: 50% 50% 50% 50% / 62% 62% 38% 38%;
+  background: linear-gradient(180deg, rgba(200, 230, 255, .9), rgba(110, 180, 240, .85)); box-shadow: 0 0 8px rgba(120, 190, 250, .35);
+  --land: calc(100vh - 250px); animation: drop-fall 7s cubic-bezier(.55, 0, .85, .35) infinite; }
+.drop::before, .drop::after { content: ''; position: absolute; left: 50%; top: 100%; width: 14px; height: 4px; border-radius: 50%;
+  border: 1.5px solid rgba(170, 215, 255, .75); transform: translate(-50%, -50%) scale(0); opacity: 0;
+  animation: ripple 7s linear infinite; animation-delay: inherit; animation-duration: inherit; }
+.drop::after { animation-name: ripple-late; }
+.drop.d1 { left: 12%; --land: calc(100vh - 262px); animation-delay: 0s; }
+.drop.d2 { left: 36%; --land: calc(100vh - 244px); animation-delay: 2.4s; animation-duration: 8.5s; }
+.drop.d3 { left: 61%; --land: calc(100vh - 256px); animation-delay: 4.1s; }
+.drop.d4 { left: 84%; --land: calc(100vh - 240px); animation-delay: 1.3s; animation-duration: 9s; }
+.drop.d5 { left: 24%; --land: calc(100vh - 250px); animation-delay: 5.6s; animation-duration: 7.8s; }
+.drop.d6 { left: 72%; --land: calc(100vh - 266px); animation-delay: 3.3s; animation-duration: 10s; }
+@keyframes drop-fall {
+  0% { transform: translateY(0); opacity: 0; }
+  6% { opacity: 1; }
+  36% { transform: translateY(var(--land)); opacity: 1; }
+  37%, 100% { transform: translateY(var(--land)); opacity: 1; background: transparent; box-shadow: none; }
+}
+@keyframes ripple { 0%, 36% { transform: translate(-50%, -50%) scale(0); opacity: 0; } 37% { transform: translate(-50%, -50%) scale(1); opacity: 1; } 75%, 100% { transform: translate(-50%, -50%) scale(9); opacity: 0; } }
+@keyframes ripple-late { 0%, 42% { transform: translate(-50%, -50%) scale(0); opacity: 0; } 43% { transform: translate(-50%, -50%) scale(1); opacity: .8; } 85%, 100% { transform: translate(-50%, -50%) scale(6); opacity: 0; } }
+
+/* Kratka odpływu: woda wolno spływa przez szczeliny */
+.login-side .drain { height: 30px; padding: 7px; gap: 8px; }
+.drain span { position: relative; overflow: hidden; }
+.drain span::after { content: ''; position: absolute; inset: -100% 0 auto 0; height: 100%; background: linear-gradient(180deg, transparent, #A9D4F7 55%, #4FA3E0); opacity: .9; animation: drain-fall 2.6s cubic-bezier(.45, .05, .55, .95) infinite; }
+.drain span:nth-child(2)::after { animation-delay: -.35s } .drain span:nth-child(3)::after { animation-delay: -.7s } .drain span:nth-child(4)::after { animation-delay: -1.05s }
+.drain span:nth-child(5)::after { animation-delay: -1.4s } .drain span:nth-child(6)::after { animation-delay: -1.75s } .drain span:nth-child(7)::after { animation-delay: -2.1s }
+
+@media (max-width: 900px) { .claim-name { font-size: 30px; } .claim-desc { font-size: 18px; } .login-logo { height: 36px; } .drop { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .caustic, .drop, .drop::before, .drop::after, .drain span::after { animation: none !important; }
+  .drop { display: none; }
+}
