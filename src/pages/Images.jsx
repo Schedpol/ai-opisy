@@ -116,8 +116,8 @@ export default function Images({ profile }) {
   function exportMissing() {
     const rows = []
     for (const c of visibleCats) for (const [s, colors] of model.tree.get(c)) for (const [col, shapes] of colors) for (const [sh, files] of shapes)
-      for (const f of files.values()) if (st(f.url) !== 'ok') rows.push([c, s, col, sh, f.slot.label + (f.slot.key === 'packshot' ? ` (${PACK[f.x] || f.x})` : ''), f.url.replace(DEFAULT_ASSET_BASE, ''), st(f.url) === 'brak' ? 'brak' : 'niesprawdzony', f.skus.join(' ')])
-    const csv = '\uFEFF' + [['Kategoria', 'Seria', 'Kolor', 'Kształt', 'Grafika', 'Ścieżka na FTP', 'Status', 'SKU'], ...rows].map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\r\n')
+      for (const f of files.values()) if (st(f.url) !== 'ok') rows.push([c, s, col, sh, f.slot.label + (f.slot.key === 'packshot' ? ` (${PACK[f.x] || f.x})` : ''), f.url.replace(DEFAULT_ASSET_BASE, ''), f.url, st(f.url) === 'brak' ? 'brak' : 'niesprawdzony', f.skus.join(' ')])
+    const csv = '\uFEFF' + [['Kategoria', 'Seria', 'Kolor', 'Kształt', 'Grafika', 'Ścieżka w folderze AEDLER', 'Pełny adres', 'Status', 'SKU'], ...rows].map(r => r.map(x => `"${String(x).replace(/"/g, '""')}"`).join(';')).join('\r\n')
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = `brakujace-grafiki-${new Date().toISOString().slice(0, 10)}.csv`; a.click(); URL.revokeObjectURL(a.href)
   }
 
@@ -178,7 +178,7 @@ export default function Images({ profile }) {
                               const path = f.url.replace(DEFAULT_ASSET_BASE, '')
                               return s2 === 'ok'
                                 ? <a key={f.url} className="img-chip ok" href={f.url} target="_blank" rel="noreferrer" title={`${path}\nSKU: ${f.skus.join(', ')}`}>{label}</a>
-                                : <span key={f.url} className={`img-chip ${s2}`} title={`${s2 === 'brak' ? 'Brak pliku' : 'Nie sprawdzono'} – wgraj jako: ${path}\nSKU: ${f.skus.join(', ')}`}>{label}<code>{path}</code></span>
+                                : <span key={f.url} className={`img-chip ${s2}`} title={`${s2 === 'brak' ? 'Brak pliku' : 'Nie sprawdzono'} – wgraj jako: ${path}\nPełny adres: ${f.url}\nSKU: ${f.skus.join(', ')}`}>{label}<code>{path}</code></span>
                             })}</div>
                           </div>
                         )
