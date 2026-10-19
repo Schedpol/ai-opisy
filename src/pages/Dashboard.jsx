@@ -30,12 +30,13 @@ export default function Dashboard({ profile }) {
     } catch (e) { setS({ error: plError(e.message) }); return }
     const [prodRows, descRows, asRows, blRows] = all
     const prod = { data: prodRows }, desc = { data: descRows }
-    const [ch, tp, fam, jobs, facts] = await Promise.all([
+    const [ch, tp, fam, jobs, facts, learnQ] = await Promise.all([
       supabase.from('channels').select('id, marketplace, language, active, baselinker_source_id').eq('active', true),
       supabase.from('templates').select('channel_id, brand_id').eq('status', 'aktywny'),
       supabase.from('product_families').select('id, brand_id, model_name'),
       supabase.from('jobs').select('*', { count: 'exact', head: true }).gte('created_at', month.toISOString()),
       supabase.from('kb_facts').select('*', { count: 'exact', head: true }).eq('status', 'do_akceptacji'),
+      supabase.from('review_comments').select('id', { count: 'exact', head: true }).is('learned_at', null),
     ])
     const err = [ch, tp, fam, jobs, facts].find(r => r.error)?.error
     if (err) { setS({ error: plError(err.message) }); return }
@@ -61,7 +62,7 @@ export default function Dashboard({ profile }) {
       quality: { variants: variants.length, autoOk: variants.filter(d => d.qa?.pass && d.status !== 'do_weryfikacji').length,
         qaFail: done.filter(d => d.qa && !d.qa.pass).length, revised: Object.values(latest).filter(d => d.version > 1).length,
         langNotes: done.reduce((n, d) => n + (d.qa?.language_notes?.length || 0), 0) },
-      jobs: jobs.count || 0, pendingFacts: facts.count || 0, families: fam.data.length, products: prod.data.length,
+      jobs: jobs.count || 0, pendingFacts: facts.count || 0, toLearn: learnQ.error ? 0 : (learnQ.count || 0), families: fam.data.length, products: prod.data.length,
       cov: { pim: asRows.map(r => r.sku), bl: blRows ? blRows.map(r => r.sku) : null, blSynced: blRows?.length ? blRows.reduce((m, r) => r.synced_at > m ? r.synced_at : m, '') : null,
         prod: prod.data, latest, channels: ch.data } })
   })() }, [reload])
@@ -123,6 +124,7 @@ export default function Dashboard({ profile }) {
     reviewN > 0 && { text: `${pl(reviewN, ['opis', 'opisy', 'opisów'])} ${verb(reviewN, 'czeka', 'czekają', 'czeka')} na weryfikację.`, to: '/weryfikacja', cta: 'Weryfikacja' },
     errN > 0 && { text: `${pl(errN, ['opis', 'opisy', 'opisów'])} ${verb(errN, 'ma', 'mają', 'ma')} błąd – sprawdź uwagi QA i wygeneruj ponownie.`, to: '/weryfikacja', cta: 'Błędy' },
     s.pendingFacts > 0 && { text: `${pl(s.pendingFacts, ['fakt', 'fakty', 'faktów'])} ${verb(s.pendingFacts, 'czeka', 'czekają', 'czeka')} na akceptację – bez nich generacja nie ruszy.`, to: '/wiedza', cta: 'Księga wiedzy' },
+    s.toLearn >= 10 && { text: `${pl(s.toLearn, ['uwaga', 'uwagi', 'uwag'])} z weryfikacji ${verb(s.toLearn, 'czeka', 'czekają', 'czeka')} na naukę – zamień je w wytyczne dla AI.`, to: '/nauka', cta: 'Nauka z uwag' },
     accN > 0 && { text: `${pl(accN, ['zaakceptowany opis', 'zaakceptowane opisy', 'zaakceptowanych opisów'])} ${verb(accN, 'czeka', 'czekają', 'czeka')} na publikację.`, to: '/publikacja', cta: 'Publikacja' },
     appNoContent.length > 0 && { text: `${appNoContent.length} SKU w aplikacji nie ma jeszcze opisu${market ? ' na wybranym rynku' : ''}.`, to: '/produkty', cta: 'Generuj opisy' },
   ].filter(Boolean)

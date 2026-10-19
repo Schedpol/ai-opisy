@@ -31,6 +31,7 @@ Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne 
 | [Biblioteka grafik](/biblioteka) | banery i grafiki wspólne dla marki, technologii, serii lub modelu | admin |
 | [Frazy kluczowe](/frazy) | banki fraz per kategoria i język (DataForSEO), frazy startowe, wykluczenia | generujący; frazy startowe zatwierdza akceptujący |
 | [Weryfikacja](/weryfikacja) | przegląd opisów: treść w języku rynku + polskie tłumaczenie kontrolne, uwagi QA, akceptacja, generacja wariantów | akceptujący |
+| [Nauka z uwag](/nauka) | uwagi z Weryfikacji porządkowane przez AI w wytyczne (ogólne i per język) do zatwierdzenia; fakty z uwag trafiają do Księgi wiedzy jako propozycje | uruchamia i zatwierdza akceptujący |
 | [Publikacja](/publikacja) | wysyłka zaakceptowanych opisów do Baselinkera | admin |
 | [Parametry Base](/parametry) | wyliczanie parametrów z PIM, tłumaczenia na 13 języków, porównanie i zapis w Base | porównuje akceptujący, zapisuje admin |
 | [Reguły QA](/reguly) | zakazane sformułowania, marki konkurencji, zasady redakcyjne dla AI; propozycje z uwag weryfikujących | proponuje każdy, zatwierdza admin |
@@ -90,6 +91,7 @@ Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne 
 
 - **Fakty tylko ze źródła.** Fakt bez potwierdzenia w dokumentacji technicznej nie trafia do Księgi wiedzy. AI pisze wyłącznie z zatwierdzonych faktów, więc błąd w fakcie powieli się we wszystkich opisach.
 - **Weryfikuj na polskim tłumaczeniu kontrolnym, a język sprawdzaj w oryginale.** Opisy na Kaufland DE wymagają przeglądu native speakera – Kaufland nie dopuszcza treści tłumaczonych automatycznie.
+- **Uwagi uczą generator.** Każdy komentarz w Weryfikacji trafia do nauki. Na ekranie Nauka z uwag (raz w tygodniu albo po ok. 10–15 uwagach) AI zamienia je w wytyczne, a fakty kieruje do Księgi wiedzy. Pisz uwagi tak, żeby było jasne, czy to zasada („lead maks. 2 zdania”), czy fakt o produkcie („Antis ma odpływ w narożniku”).
 - **Powtarzająca się uwaga = reguła.** Przy komentarzu w Weryfikacji zaznacz „zaproponuj jako regułę”. Po zatwierdzeniu przez admina AI będzie jej przestrzegać przy kolejnych opisach.
 - **Atrybuty z SKU.** Kolor, powłoka, odpływ i zestaw z nośnikiem wynikają z końcówki SKU według Słownika importu. Uwaga na pułapkę: w SKU Aedler **B/SC to czarny**, a w kodach Schedpol **B/ST to biały**.
 - **Zdjęcia wg konwencji ścieżek** \`aedler/{model}/{kolor}/{kształt}/{X}.jpg\` (1 = packshot, 2–3 = aranżacje, 4 = infografika). Plik spoza konwencji aplikacja oznaczy, ale nie użyje go w opisie.
@@ -126,7 +128,8 @@ export const SCREEN_HELP = [
   { path: '/slownik', title: 'Słownik importu', section: 'jakosc', md: `- Reguły zamieniają końcówki SKU na atrybuty: kolor, powłokę, odpływ, kształt, zestaw (/NO), role zdjęć.
 - Nowa końcówka SKU = nowa reguła, potem ponowny import produktów.
 - Uwaga: w SKU Aedler **B/SC = czarny**, w kodach Schedpol **B/ST = biały**.` },
-  { path: '/wiedza', title: 'Księga wiedzy', section: 'jakosc', md: `- Wgraj DOCX – AI wyciągnie fakty jako propozycje.
+  { path: '/wiedza', title: 'Księga wiedzy', section: 'jakosc', md: `- **Technologie** (u góry): hierarchia, np. Stabildense › technologia kompozytowa / zintegrowana. Fakt o Stabildense trafia do obu odmian, fakt o technologii kompozytowej – tylko do brodzików kompozytowych.
+- Wgraj DOCX – AI wyciągnie fakty jako propozycje.
 - Akceptujący zatwierdza tylko fakty potwierdzone w dokumentacji.
 - Fakt modelu obowiązuje też zestaw tego modelu (np. „Hesperia + nośnik”).` },
   { path: '/szablony', title: 'Szablony', section: 'nowy-rynek-lub-kanal-sprzedazy-admin', md: `- Wybierz kanał, rynek i kategorię; kategoria bez szablonu korzysta z domyślnego.
@@ -146,6 +149,10 @@ export const SCREEN_HELP = [
   { path: '/parametry', title: 'Parametry Base', section: 'aktualizacja-parametrow-w-base', md: `- Najpierw **Porównaj z Base**, potem **Zapisz w Base** (admin).
 - Zapis zmienia tylko parametry z mapowania; puste wartości nie są wysyłane.
 - Inny język: **Przetłumacz brakujące (AI)** → zatwierdź w panelu Tłumaczenia; do Base trafiają tylko zatwierdzone.` },
+  { path: '/nauka', title: 'Nauka z uwag', section: 'jakosc', md: `- **Ucz się z tych uwag** – AI klasyfikuje każdą uwagę: zasada stylu, fakt o produkcie albo poprawka jednorazowa.
+- Zasady trafiają do propozycji wytycznych (ogólnych i dla języka) z listą zmian – popraw i zatwierdź; dopiero wtedy działają.
+- Fakty trafiają do Księgi wiedzy jako propozycje do akceptacji.
+- Poprzednie wersje wytycznych są w archiwum.` },
   { path: '/reguly', title: 'Reguły QA', section: 'jakosc', md: `- Zakazane sformułowania i marki konkurencji blokują akceptację opisu.
 - Zasady redakcyjne trafiają do promptu AI.
 - Filtr języka pokazuje reguły danego języka razem z regułami dla wszystkich języków.` },

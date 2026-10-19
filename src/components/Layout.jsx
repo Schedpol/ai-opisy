@@ -10,7 +10,7 @@ const GROUPS = [
   { label: 'Start', items: [{ to: '/', label: 'Dashboard', end: true }] },
   { label: 'Produkty', items: [{ to: '/drzewo', label: 'Drzewo produktów' }, { to: '/produkty', label: 'Produkty' }] },
   { label: 'Przygotowanie treści', items: [{ to: '/wiedza', label: 'Księga wiedzy' }, { to: '/frazy', label: 'Frazy kluczowe' }, { to: '/szablony', label: 'Szablony' }, { to: '/biblioteka', label: 'Biblioteka grafik' }] },
-  { label: 'Kontrola i publikacja', items: [{ to: '/weryfikacja', label: 'Weryfikacja', badge: 'review' }, { to: '/publikacja', label: 'Publikacja' }, { to: '/parametry', label: 'Parametry Base' }] },
+  { label: 'Kontrola i publikacja', items: [{ to: '/weryfikacja', label: 'Weryfikacja', badge: 'review' }, { to: '/nauka', label: 'Nauka z uwag', badge: 'learn' }, { to: '/publikacja', label: 'Publikacja' }, { to: '/parametry', label: 'Parametry Base' }] },
   { label: 'Konfiguracja', admin: true, items: [{ to: '/slownik', label: 'Słownik importu' }, { to: '/reguly', label: 'Reguły QA' }, { to: '/ustawienia', label: 'Ustawienia' }, { to: '/uzytkownicy', label: 'Użytkownicy' }] },
 ]
 
@@ -20,7 +20,11 @@ export default function Layout({ profile }) {
   const [working, setWorking] = useState(activeJobCount())
   // licznik opisów czekających na weryfikację (odświeżany przy zmianie ekranu)
   const [review, setReview] = useState(0)
-  useEffect(() => { supabase.from('descriptions').select('id', { count: 'exact', head: true }).in('status', ['do_weryfikacji', 'poprawki']).then(r => setReview(r.count || 0)) }, [loc.pathname])
+  const [learn, setLearn] = useState(0)
+  useEffect(() => {
+    supabase.from('descriptions').select('id', { count: 'exact', head: true }).in('status', ['do_weryfikacji', 'poprawki']).then(r => setReview(r.count || 0))
+    supabase.from('review_comments').select('id', { count: 'exact', head: true }).is('learned_at', null).then(r => setLearn(r.error ? 0 : r.count || 0))
+  }, [loc.pathname])
   useEffect(() => { const f = e => setWorking(e.detail); jobActivity.addEventListener('change', f); return () => jobActivity.removeEventListener('change', f) }, [])
   return (
     <div className="shell">
@@ -36,7 +40,7 @@ export default function Layout({ profile }) {
               <span className="nav-group-label">{g.label}</span>
               {g.items.map(n => (
                 <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
-                  {n.label}{n.badge === 'review' && review > 0 && <span className="nav-badge" aria-label={`${review} czeka na weryfikację`}>{review}</span>}
+                  {n.label}{n.badge === 'review' && review > 0 && <span className="nav-badge" aria-label={`${review} czeka na weryfikację`}>{review}</span>}{n.badge === 'learn' && learn > 0 && <span className="nav-badge soft" aria-label={`${learn} uwag czeka na naukę`}>{learn}</span>}
                 </NavLink>
               ))}
             </div>

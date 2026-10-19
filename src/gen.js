@@ -9,7 +9,7 @@ const MARKET = c => `${c.marketplace} ${c.language.toUpperCase()}`
 // Zbiera wszystko, czego potrzebuje generacja, i sprawdza warunki wstępne
 export async function buildContext(familyId, channelId) {
   const { data: family } = await supabase.from('product_families').select('*').eq('id', familyId).single()
-  const [ch, br, tp, lead, facts, banks, lib, rules] = await Promise.all([
+  const [ch, br, tp, lead, facts, banks, lib, rules, guides] = await Promise.all([
     supabase.from('channels').select('*').eq('id', channelId).single(),
     supabase.from('brands').select('id, name').eq('id', family.brand_id).single(),
     supabase.from('templates').select('*').eq('channel_id', channelId).eq('brand_id', family.brand_id).eq('status', 'aktywny'),
@@ -18,6 +18,7 @@ export async function buildContext(familyId, channelId) {
     supabase.from('keyword_banks').select('*'),
     supabase.from('media_library').select('*'),
     supabase.from('qa_rules').select('*').eq('status', 'aktywna'),
+    supabase.from('style_guides').select('scope, rules').eq('status', 'aktywna'),
   ])
   const eqc = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
   const template = (tp.data || []).find(t => t.category && eqc(t.category, family.category)) || (tp.data || []).find(t => !t.category) || null
@@ -35,7 +36,12 @@ export async function buildContext(familyId, channelId) {
   if (!keywords.length) problems.push(`Bank fraz „${family.category} · ${channel.language.toUpperCase()}” jest pusty – odśwież go (Frazy kluczowe).`)
   return { problems, family, channel, brand: br.data, template, product, facts: famFacts, keywords, library: lib.data || [],
     forbidden: (rules.data || []).filter(r => ['zakazany_wzorzec', 'marka_konkurencji'].includes(r.rule_type) && (!r.language || r.language === channel.language)).map(r => r.pattern),
-    instructions: (rules.data || []).filter(r => r.rule_type === 'instrukcja' && (!r.language || r.language === channel.language)).map(r => r.pattern) }
+    // wytyczne wyuczone z uwag (ogólne + języka rynku), potem reguły redakcyjne dodane ręcznie
+    instructions: [
+      ...(guides.data || []).filter(g => g.scope === 'all').flatMap(g => g.rules || []),
+      ...(guides.data || []).filter(g => g.scope === channel.language).flatMap(g => g.rules || []),
+      ...(rules.data || []).filter(r => r.rule_type === 'instrukcja' && (!r.language || r.language === channel.language)).map(r => r.pattern),
+    ].filter((x, i, a) => x && a.indexOf(x) === i) }
 }
 
 function payloadFrom(ctx, extra) {

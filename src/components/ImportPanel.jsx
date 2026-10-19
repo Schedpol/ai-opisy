@@ -3,6 +3,7 @@ import Papa from 'papaparse'
 import { supabase, plError } from '../supabase.js'
 import { parseProducts, groupFamilies, rowsFromBaselinkerCsv } from '../parser.js'
 import { runJob } from '../jobs.js'
+import { autoAssignTechnologies } from '../knowledge.js'
 
 const ATTR_COLS = [['wymiar', 'Wymiar'], ['wysokosc_cm', 'Wys. cm'], ['ksztalt', 'Kształt'], ['wykonczenie', 'Wykończenie'], ['powloka', 'Powłoka'], ['odplyw', 'Odpływ'], ['w_zestawie', 'W zestawie']]
 
@@ -72,6 +73,8 @@ export default function ImportPanel({ brands, rules, existingSkus, onSaved, onCl
           .select('id, brand_id, model_name')
         if (error) throw error
         data.forEach(d => { famIds[`${d.brand_id}|${d.model_name}`] = d.id })
+        // technologie wg kategorii/serii (np. brodziki kompozytowe → Stabildense – technologia kompozytowa + Stabildense)
+        try { await autoAssignTechnologies(supabase, data.map(d => d.id)) } catch (e) { /* brak tabeli technologii – pomiń */ }
       }
       const rows = preview.parsed.map(p => ({
         sku: p.sku, ean: p.ean || null, name: p.name, family_id: famIds[`${p.brand_id}|${p.model_name}`] || null,

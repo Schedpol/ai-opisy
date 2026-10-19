@@ -4,6 +4,7 @@ import { supabase, plError } from '../supabase.js'
 import { applies, scopeLabel, LEVEL_LABEL } from '../knowledge.js'
 import { runJob } from '../jobs.js'
 import DrainLoader from '../components/DrainLoader.jsx'
+import { autoAssignTechnologies } from '../knowledge.js'
 
 const plural = (n, one, few, many) => n === 1 ? one : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? few : many
 
@@ -173,6 +174,53 @@ function Documents({ ctx, docs, onDone }) {
   )
 }
 
+const odm = (n, a, b, c) => `${n} ${n === 1 ? a : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? b : c}`
+// Technologie marek z hierarchią: fakty o technologii nadrzędnej trafiają też do jej odmian
+function Technologies({ data, admin, onChanged }) {
+  const [f, setF] = useState({ name: '', parent_id: '', match_category: '', match_series: '' })
+  const [msg, setMsg] = useState(null)
+  if (!data.techs.length && !admin) return null
+  const roots = data.techs.filter(t => !t.parent_id)
+  const famCount = name => data.families.filter(fm => (fm.technologies || []).includes(name)).length
+  const factCount = name => data.facts.filter(x => x.level === 'technologia' && x.status === 'zatwierdzony' && String(x.technology || '').toLowerCase() === name.toLowerCase()).length
+  const brand = id => data.brands.find(b => b.id === id)?.name || ''
+  async function assign() {
+    try { const n = await autoAssignTechnologies(supabase); setMsg({ type: 'ok', text: n ? `Uzupełniono technologie w ${n} rodzinach.` : 'Wszystkie rodziny mają już przypisane technologie.' }); onChanged() }
+    catch (e) { setMsg({ type: 'error', text: plError(e.message) }) }
+  }
+  async function add() {
+    const parent = data.techs.find(t => t.id === f.parent_id)
+    const brand_id = parent?.brand_id || data.brands.find(b => b.name === 'Aedler')?.id || data.brands[0]?.id
+    const { error } = await supabase.from('kb_technologies').insert({ brand_id, name: f.name.trim(), parent_id: f.parent_id || null, match_category: f.match_category.trim().toLowerCase() || null, match_series: f.match_series.trim().toLowerCase() || null, sort: data.techs.length + 1 })
+    setMsg(error ? { type: 'error', text: plError(error.message) } : { type: 'ok', text: `Dodano technologię „${f.name.trim()}”. Kliknij „Przypisz rodzinom”, żeby uzupełnić rodziny.` })
+    if (!error) { setF({ name: '', parent_id: '', match_category: '', match_series: '' }); onChanged() }
+  }
+  const Row = ({ t, child }) => (
+    <li className={child ? 'tech child' : 'tech'}>
+      <strong>{t.name}</strong> <span className="muted small">{brand(t.brand_id)} · {odm(famCount(t.name), 'rodzina', 'rodziny', 'rodzin')} · {odm(factCount(t.name), 'fakt', 'fakty', 'faktów')}{t.match_category ? ` · kategoria „${t.match_category}”` : ''}{t.match_series ? ` · seria „${t.match_series}”` : ''}</span>
+      {data.techs.filter(c => c.parent_id === t.id).length > 0 && <ul>{data.techs.filter(c => c.parent_id === t.id).map(c => <Row key={c.id} t={c} child />)}</ul>}
+    </li>
+  )
+  return (
+    <details className="panel tech-panel">
+      <summary><strong>Technologie</strong> <span className="muted small">{roots.map(r => r.name).join(' · ') || 'brak'} – fakty o technologii nadrzędnej trafiają też do jej odmian</span></summary>
+      <ul className="tech-tree">{roots.map(t => <Row key={t.id} t={t} />)}</ul>
+      <p className="muted small">Rodziny dostają technologie automatycznie przy imporcie – według kategorii z PIM (np. brodziki kompozytowe) albo serii (np. Standard Plus). Ręcznie dopisane technologie (ekran Produkty) zostają.</p>
+      {admin && <>
+        <div className="row-actions"><button className="btn ghost small-btn" onClick={assign}>Przypisz rodzinom</button></div>
+        <div className="form-grid tech-form">
+          <label>Nowa technologia<input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="np. Stabildense – technologia kompozytowa" /></label>
+          <label>Nadrzędna<select value={f.parent_id} onChange={e => setF({ ...f, parent_id: e.target.value })}><option value="">— brak —</option>{data.techs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+          <label>Kategoria PIM (początek)<input value={f.match_category} onChange={e => setF({ ...f, match_category: e.target.value })} placeholder="np. brodziki kompozytowe" /></label>
+          <label>albo seria / technologia z PIM<input value={f.match_series} onChange={e => setF({ ...f, match_series: e.target.value })} placeholder="np. stabildense" /></label>
+          <button className="btn" disabled={!f.name.trim()} onClick={add}>Dodaj</button>
+        </div>
+      </>}
+      {msg && <p className={msg.type}>{msg.text}</p>}
+    </details>
+  )
+}
+
 export default function Knowledge({ profile }) {
   const [tab, setTab] = useState('do_akceptacji')
   const [data, setData] = useState(null)
@@ -180,15 +228,16 @@ export default function Knowledge({ profile }) {
   const canApprove = ['akceptujacy', 'admin'].includes(profile?.role)
 
   async function load() {
-    const [f, b, fam, d] = await Promise.all([
+    const [f, b, fam, d, tq] = await Promise.all([
       supabase.from('kb_facts').select('*').order('created_at'),
       supabase.from('brands').select('id, name'),
       supabase.from('product_families').select('id, brand_id, model_name, series, technologies').order('model_name'),
       supabase.from('kb_documents').select('*').order('created_at', { ascending: false }),
+      supabase.from('kb_technologies').select('*').order('sort'),
     ])
     const err = [f, b, fam, d].find(x => x.error)?.error
     if (err) { setError(plError(err.message)); return }
-    setData({ facts: f.data, brands: b.data, families: fam.data, docs: d.data })
+    setData({ facts: f.data, brands: b.data, families: fam.data, docs: d.data, techs: tq.error ? [] : (tq.data || []) })
   }
   useEffect(() => { load() }, [])
 
@@ -196,7 +245,7 @@ export default function Knowledge({ profile }) {
     if (!data) return null
     const uniq = arr => [...new Set(arr.filter(Boolean).map(s => s.trim()))].sort()
     return { brands: data.brands, families: data.families,
-      technologies: uniq([...data.facts.map(f => f.technology), ...data.families.flatMap(f => f.technologies || [])]),
+      technologies: uniq([...data.techs.map(t => t.name), ...data.facts.map(f => f.technology), ...data.families.flatMap(f => f.technologies || [])]),
       series: uniq([...data.facts.map(f => f.series), ...data.families.map(f => f.series)]) }
   }, [data])
 
@@ -209,6 +258,7 @@ export default function Knowledge({ profile }) {
   return (
     <section className="page">
       <h1>Księga wiedzy</h1>
+      <Technologies data={data} admin={profile?.role === 'admin'} onChanged={load} />
       <div className="tabs" role="tablist">
         {TABS.map(([k, l]) => (
           <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'tab on' : 'tab'} onClick={() => setTab(k)}>

@@ -587,3 +587,24 @@ p.ok::before { content: '✓'; position: absolute; left: 0; top: .1em; width: 18
 a .dnode.sku:hover rect:first-child { stroke: var(--action); }
 @keyframes node-in { from { opacity: 0 } to { opacity: 1 } }
 @media (prefers-reduced-motion: reduce) { .dnode, .tree-diagram .links path { transition: none; animation: none; } }
+
+/* Nauka z uwag */
+.section-title { margin: 26px 0 10px; font-size: 18px; }
+.learn-langs { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
+.learn-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.learn-row .btn { margin-left: auto; }
+.learn-list { margin: 8px 0 4px; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow: auto; }
+.proposal-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.proposal-head h3 { margin: 0; }
+.proposal textarea { width: 100%; font-size: 14px; line-height: 1.5; margin-top: 6px; }
+.changes { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; margin: 12px 0; }
+.changes > div { border-radius: 8px; padding: 10px 12px; font-size: 13.5px; }
+.changes ul { margin: 6px 0 0; padding-left: 18px; }
+.ch-add { background: #EAF5EF; } .ch-merge { background: #EEF3FB; } .ch-del { background: #FBEDEC; } .ch-conf { background: #FFF4DE; }
+.guide-rules { margin: 10px 0 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.nav-badge.soft { background: #3D5180; }
+/* Technologie w Księdze wiedzy */
+.tech-tree { list-style: none; padding: 0; margin: 12px 0; display: flex; flex-direction: column; gap: 8px; }
+.tech-tree ul { list-style: none; padding-left: 22px; margin: 6px 0 0; display: flex; flex-direction: column; gap: 6px; border-left: 2px solid var(--line); }
+.tech.child { padding-left: 10px; }
+.tech-form { align-items: end; }
