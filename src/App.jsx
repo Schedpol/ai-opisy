@@ -22,6 +22,7 @@ import Images from './pages/Images.jsx'
 import StudioHome from './pages/StudioHome.jsx'
 import ModulePage from './pages/ModulePage.jsx'
 import Analytics from './pages/Analytics.jsx'
+import Prices from './pages/Prices.jsx'
 import Settings from './pages/Settings.jsx'
 import QaRules from './pages/QaRules.jsx'
 import Tree from './pages/Tree.jsx'
@@ -67,7 +68,7 @@ export default function App() {
           <Route path="analityka" element={<Analytics profile={profile} />} />
           <Route path="oferta" element={<ModulePage moduleKey="oferta" />} />
           <Route path="pozyskiwanie" element={<ModulePage moduleKey="pozyskiwanie" />} />
-          <Route path="ceny" element={<ModulePage moduleKey="ceny" />} />
+          <Route path="ceny" element={<Prices profile={profile} />} />
           <Route path="operacje" element={<ModulePage moduleKey="operacje" />} />
           <Route path="drzewo" element={<Tree />} />
           <Route path="produkty" element={<Products />} />

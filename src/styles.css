@@ -688,3 +688,22 @@ a .dnode.sku:hover rect:first-child { stroke: var(--action); }
 .building-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid currentColor; opacity: .8; }
 .module-tile-head { flex-wrap: wrap; }
 .module-tile-head .tag { white-space: nowrap; }
+/* Ceny u partnerów (Dealavo) */
+.prices-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 8px; }
+.prices-head h2 { margin: 0; }
+.prices-table tbody tr { cursor: pointer; }
+.prices-table tbody tr:hover { background: #F4F7FB; }
+.prices-table tbody tr.sel { background: #EAF0FA; }
+.prices-table tr.group-sep td { border-top: 2px solid var(--line); }
+.prices-table .tag { margin-left: 8px; }
+td.neg { color: #8E1F15; }
+.crit-text { color: #B42318; } .warn-text { color: #B26B00; font-weight: 600; }
+tr.below-min td { background: #FDF3F2; }
+.alias-box { background: #F7F9FC; border-radius: 8px; padding: 12px 14px; margin: 8px 0 16px; }
+.alias-box h3 { margin: 0 0 4px; font-size: 15px; }
+.alias-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.alias-chip { display: inline-flex; align-items: center; gap: 6px; background: #E3EAF6; border-radius: 999px; padding: 3px 4px 3px 10px; font-size: 13px; }
+.alias-chip button { border: none; background: none; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 6px; color: var(--ink-soft); }
+.alias-sug { border: 1px dashed #9DB2D6; background: #fff; border-radius: 999px; padding: 3px 10px; font-size: 13px; cursor: pointer; }
+.alias-sug:hover { border-style: solid; }
+.prices-table tr.unmapped td:not(:nth-child(2)) { color: var(--ink-soft); }
