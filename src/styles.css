@@ -717,3 +717,9 @@ tr.below-min td { background: #FDF3F2; }
 .seg button + button { border-left: 1px solid var(--line); }
 .seg button.on { background: var(--action); color: #fff; }
 .ch-price { display: inline-block; margin-right: 10px; white-space: nowrap; }
+.backfill { margin-top: 16px; padding: 12px 14px; background: #F7F9FC; border-radius: 8px; }
+.backfill summary { cursor: pointer; }
+.file-import { margin: 10px 0 18px; padding-bottom: 14px; border-bottom: 1px solid var(--line); }
+.backfill h3 { font-size: 15px; margin: 12px 0 4px; }
+.import-plan { margin-top: 10px; }
+.import-plan ul { margin: 4px 0 8px; padding-left: 18px; }
