@@ -2,7 +2,7 @@
 export const MANUAL_UPDATED = '2026-10-12'
 
 export const SECTIONS = [
-  { id: 'role', title: 'Czym jest AI Opisy i kto co robi', md: `AI Opisy generuje opisy produktów na marketplace (eMAG RO, HU, BG, Kaufland i kolejne) oraz aktualizuje parametry produktów w Base. AI pisze wyłącznie z zatwierdzonych faktów, a każdy opis bazowy przechodzi weryfikację człowieka przed publikacją.
+  { id: 'role', title: 'Czym jest AI Opisy i kto co robi', md: `SchedpolAI eCommerce Studio to platforma e-commerce Schedpol złożona z modułów: Generator Treści (działa), Oferta i kanały, Pozyskiwanie klientów, Ceny i marża, Operacje oraz Analityka. Moduł Generator Treści generuje opisy produktów na marketplace (eMAG RO, HU, BG, Kaufland i kolejne) oraz aktualizuje parametry produktów w Base. AI pisze wyłącznie z zatwierdzonych faktów, a każdy opis bazowy przechodzi weryfikację człowieka przed publikacją.
 
 **Adres:** [https://schedpol.github.io/ai-opisy/](https://schedpol.github.io/ai-opisy/) – logowanie firmowym adresem e-mail. Konto i rolę nadaje admin (ekran Użytkownicy).
 
@@ -22,7 +22,7 @@ Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne 
 
 | Ekran | Do czego służy | Kto |
 | --- | --- | --- |
-| [Dashboard](/) | pokrycie asortymentu (PIM → Baselinker → aplikacja → treść → publikacja) z listami braków do pobrania, panel „Od czego zacząć”, statusy opisów, jakość | wszyscy; stan Baselinkera odświeża akceptujący |
+| [Dashboard](/tresci) | pokrycie asortymentu (PIM → Baselinker → aplikacja → treść → publikacja) z listami braków do pobrania, panel „Od czego zacząć”, statusy opisów, jakość | wszyscy; stan Baselinkera odświeża akceptujący |
 | [Drzewo produktów](/drzewo) | asortyment z PIM jako **lista** (marka › kategoria › model › SKU) albo **diagram** (kategoria › technologia › model › kolor › kształt › rozmiar › odpływ › SKU), pokrycie opisami per rynek, raport jakości danych PIM | wszyscy; wgrywa listę admin |
 | [Produkty](/produkty) | import z Baselinkera, rodziny (modele), wybór wariantu wiodącego, generacja opisu bazowego | generujący |
 | [Słownik importu](/slownik) | reguły odczytu atrybutów z SKU: kolor (np. B/SC = Black Scale), powłoka (AP1), odpływ, kształt, zestaw z nośnikiem (/NO), role zdjęć | admin |
@@ -119,6 +119,8 @@ Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne 
 
 // Pomoc kontekstowa: krótko, co robić na danym ekranie + link do właściwej części instrukcji
 export const SCREEN_HELP = [
+  { path: '/analityka', title: 'Analityka', section: 'role', md: `- Raporty Power BI osadzone w Studio. Przy pierwszym otwarciu Power BI poprosi o zalogowanie kontem firmowym Microsoft; potrzebna licencja Power BI Pro.
+- Admin dodaje raport linkiem z Power BI: Plik → Osadź raport → Witryna lub portal. Linki „Publikuj w internecie” są odrzucane, bo byłyby publiczne.` },
   { path: '/drzewo', title: 'Drzewo produktów', section: 'ekrany', md: `- **Lista | Diagram** – diagram pokazuje rozgałęzienie: kategoria › technologia › model › kolor › kształt › rozmiar › odpływ › SKU. Kliknij węzeł, żeby rozwinąć kolejny poziom; „Rozwiń do poziomu” otwiera całe drzewo do wybranej kolumny. Poziomy bez danych (np. odpływ dla nośników) są pomijane.
 - **Wgraj nową listę** – eksport z PIM (CSV, TSV, XLSX), najlepiej bez otwierania w Excelu.
 - Pasek przy gałęzi = opublikowane w wybranym kanale / wszystkie SKU. Kliknij status przy SKU, żeby otworzyć opis.
@@ -168,7 +170,9 @@ export const SCREEN_HELP = [
 - Pod każdym kanałem: wzorzec tytułu; obok limit znaków tytułu.
 - Kanału z opisami nie da się usunąć – wyłącz go („Aktywny”).` },
   { path: '/uzytkownicy', title: 'Użytkownicy', section: 'role', md: `- Nadawanie ról: generujący, akceptujący, admin. Role dziedziczą uprawnienia w górę.` },
-  { path: '/', title: 'Dashboard', section: 'ekrany', md: `- **Pokrycie asortymentu:** ile SKU jest w PIM, w Baselinkerze, w aplikacji, z treścią i opublikowanych. Przy każdej luce jest lista CSV do pobrania.
+  { path: '/', title: 'Pulpit Studio', section: 'role', md: `- Kafelki modułów SchedpolAI eCommerce Studio: co działa, co jest w budowie, kto jest właścicielem.
+- Admin decyduje, które moduły widzi zespół (przełącznik „widoczny dla zespołu”).` },
+  { path: '/tresci', title: 'Dashboard Generatora Treści', section: 'ekrany', md: `- **Pokrycie asortymentu:** ile SKU jest w PIM, w Baselinkerze, w aplikacji, z treścią i opublikowanych. Przy każdej luce jest lista CSV do pobrania.
 - Filtr rynku zmienia dwa ostatnie etapy (treść i publikacja) na wybrany kanał.
 - **Odśwież stan Base** (akceptujący, admin) pobiera aktualną listę SKU z katalogu Baselinkera – rób to po zmianach w Base.
 - **Od czego zacząć** – najważniejsze następne kroki z linkami do właściwych ekranów.` },

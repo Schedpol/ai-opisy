@@ -661,3 +661,30 @@ a .dnode.sku:hover rect:first-child { stroke: var(--action); }
 .usage-bar { flex: 1; min-width: 200px; height: 12px; border-radius: 6px; }
 .usage-bar.warn > span { background: #D9922E; } .usage-bar.crit > span { background: var(--error, #B42318); }
 .plan-triggers { padding-left: 18px; display: flex; flex-direction: column; gap: 8px; margin: 8px 0 16px; }
+
+/* ===== SchedpolAI eCommerce Studio ===== */
+.brand-name { display: flex; flex-direction: column; line-height: 1.1; color: #fff; text-decoration: none; }
+.brand-name strong { font-size: 16px; } .brand-name small { font-size: 11.5px; color: #9FB0D3; font-weight: 500; letter-spacing: .01em; }
+.module-nav { display: flex; flex-direction: column; gap: 2px; margin-bottom: 10px; }
+.module-link { font-weight: 600; }
+.sub-nav { border-left: 2px solid rgba(255,255,255,.12); margin: 0 0 10px 10px; padding-left: 6px; }
+.sub-nav .nav-group + .nav-group { margin-top: 10px; }
+.admin-nav { border-top: 1px solid rgba(255,255,255,.12); padding-top: 10px; margin-top: 4px; }
+.studio-head { margin-bottom: 16px; }
+.module-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-bottom: 16px; }
+.module-tile { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: flex; flex-direction: column; gap: 8px; }
+.module-tile.aktywny { border-color: #9DB2D6; box-shadow: inset 4px 0 0 var(--action); }
+.module-tile-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.module-tile-head h2 { margin: 0; font-size: 17px; } .module-tile-head h2 a { color: var(--ink); text-decoration: none; }
+.module-tile p { margin: 0; }
+.module-tile-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; gap: 10px; padding-top: 6px; }
+.module-scope, .module-needs { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.report-panel { padding: 12px; }
+.report-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+.report-actions { display: flex; gap: 12px; }
+.report-frame { width: 100%; height: 75vh; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.module-link.building { color: #9FB0D3; }
+.module-link.building.active { color: var(--ink); }
+.building-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid currentColor; opacity: .8; }
+.module-tile-head { flex-wrap: wrap; }
+.module-tile-head .tag { white-space: nowrap; }

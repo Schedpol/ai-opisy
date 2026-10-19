@@ -34,7 +34,7 @@ export default function Login() {
         <div className="drain" aria-hidden="true">
           <span /><span /><span /><span /><span /><span /><span />
         </div>
-        <p className="login-claim"><span className="claim-name">SchedpolAI</span> <span className="claim-desc">Generator Treści</span></p>
+        <p className="login-claim"><span className="claim-name">SchedpolAI</span> <span className="claim-desc">eCommerce Studio</span></p>
       </section>
       <section className="login-form">
         <form onSubmit={submit} className="panel narrow" noValidate>

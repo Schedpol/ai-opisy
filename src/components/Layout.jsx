@@ -1,19 +1,21 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { MODULES, moduleOfPath } from '../studio/modules.js'
 import HelpDrawer from '../help/HelpDrawer.jsx'
 import JobOverlay from './JobOverlay.jsx'
 import { APP_VERSION } from '../version.js'
 import { jobActivity, activeJobCount } from '../jobs.js'
 import { supabase, ROLE_LABELS } from '../supabase.js'
 
-// Menu w kolejności pracy; „Konfiguracja” tylko dla admina
+// Menu modułu Generator Treści (w kolejności pracy). Ustawienia i Użytkownicy – Administracja całego Studio.
 const GROUPS = [
-  { label: 'Start', items: [{ to: '/', label: 'Dashboard', end: true }] },
+  { label: 'Start', items: [{ to: '/tresci', label: 'Dashboard' }] },
   { label: 'Produkty', items: [{ to: '/drzewo', label: 'Drzewo produktów' }, { to: '/produkty', label: 'Produkty' }] },
   { label: 'Przygotowanie treści', items: [{ to: '/wiedza', label: 'Księga wiedzy' }, { to: '/frazy', label: 'Frazy kluczowe' }, { to: '/szablony', label: 'Szablony' }, { to: '/biblioteka', label: 'Biblioteka grafik' }, { to: '/grafiki', label: 'Grafiki na FTP' }] },
   { label: 'Kontrola i publikacja', items: [{ to: '/weryfikacja', label: 'Weryfikacja', badge: 'review' }, { to: '/nauka', label: 'Nauka z uwag', badge: 'learn' }, { to: '/publikacja', label: 'Publikacja' }, { to: '/parametry', label: 'Parametry Base' }] },
-  { label: 'Konfiguracja', admin: true, items: [{ to: '/slownik', label: 'Słownik importu' }, { to: '/reguly', label: 'Reguły QA' }, { to: '/ustawienia', label: 'Ustawienia' }, { to: '/uzytkownicy', label: 'Użytkownicy' }] },
+  { label: 'Konfiguracja', items: [{ to: '/slownik', label: 'Słownik importu', admin: true }, { to: '/reguly', label: 'Reguły QA' }] },
 ]
+const ADMIN = [{ to: '/ustawienia', label: 'Ustawienia' }, { to: '/uzytkownicy', label: 'Użytkownicy' }]
 
 export default function Layout({ profile }) {
   const [help, setHelp] = useState(false)
@@ -22,6 +24,13 @@ export default function Layout({ profile }) {
   // licznik opisów czekających na weryfikację (odświeżany przy zmianie ekranu)
   const [review, setReview] = useState(0)
   const [learn, setLearn] = useState(0)
+  // widoczność modułów dla zespołu (admin widzi wszystkie)
+  const [vis, setVis] = useState({ tresci: true, analityka: true })
+  const reloadVis = () => supabase.from('app_modules').select('key, team_visible').then(r => { if (!r.error) setVis(Object.fromEntries((r.data || []).map(x => [x.key, x.team_visible]))) })
+  useEffect(() => { reloadVis(); document.title = 'SchedpolAI eCommerce Studio' }, [])
+  const admin = profile?.role === 'admin'
+  const mods = MODULES.filter(m => admin || vis[m.key])
+  const cur = moduleOfPath(loc.pathname)
   useEffect(() => {
     supabase.from('descriptions').select('id', { count: 'exact', head: true }).in('status', ['do_weryfikacji', 'poprawki']).then(r => setReview(r.count || 0))
     supabase.from('review_comments').select('id', { count: 'exact', head: true }).is('learned_at', null).then(r => setLearn(r.error ? 0 : r.count || 0))
@@ -33,21 +42,36 @@ export default function Layout({ profile }) {
         <div className="brand">
           <span className={working ? 'brand-mark flowing' : 'brand-mark'} aria-hidden="true"><i /><i /><i /><i /><i /></span>
           <span className="sr-only" role="status">{working ? 'Trwa zadanie AI' : ''}</span>
-          <span title={working ? `Trwa zadanie AI (${working})` : undefined}>AI Opisy</span>
+          <NavLink to="/" className="brand-name" title={working ? `Trwa zadanie AI (${working})` : 'Pulpit Studio'}><strong>SchedpolAI</strong><small>eCommerce Studio</small></NavLink>
         </div>
-        <nav aria-label="Główna nawigacja">
-          {GROUPS.filter(g => !g.admin || profile?.role === 'admin').map(g => (
-            <div key={g.label} className="nav-group">
-              <span className="nav-group-label">{g.label}</span>
-              {g.items.map(n => (
-                <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
-                  {n.label}{n.badge === 'review' && review > 0 && <span className="nav-badge" aria-label={`${review} czeka na weryfikację`}>{review}</span>}{n.badge === 'learn' && learn > 0 && <span className="nav-badge soft" aria-label={`${learn} uwag czeka na naukę`}>{learn}</span>}
-                </NavLink>
-              ))}
-            </div>
+        <nav aria-label="Moduły Studio" className="module-nav">
+          <NavLink to="/" end className={({ isActive }) => 'nav-link module-link' + (isActive ? ' active' : '')}>Pulpit</NavLink>
+          {mods.map(m => (
+            <NavLink key={m.key} to={m.home} title={m.status !== 'aktywny' ? 'Moduł w budowie' : undefined} className={() => 'nav-link module-link' + (m.status !== 'aktywny' ? ' building' : '') + (cur?.key === m.key ? ' active' : '')}>
+              {m.name}{m.status !== 'aktywny' && <span className="building-dot" aria-label="w budowie" />}
+            </NavLink>
           ))}
-          {profile?.role !== 'admin' && <div className="nav-group"><span className="nav-group-label">Konfiguracja</span><NavLink to="/reguly" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>Reguły QA</NavLink></div>}
         </nav>
+        {cur?.key === 'tresci' && (
+          <nav aria-label="Generator Treści" className="sub-nav">
+            {GROUPS.map(g => ({ ...g, items: g.items.filter(n => !n.admin || admin) })).filter(g => g.items.length).map(g => (
+              <div key={g.label} className="nav-group">
+                <span className="nav-group-label">{g.label}</span>
+                {g.items.map(n => (
+                  <NavLink key={n.to} to={n.to} className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>
+                    {n.label}{n.badge === 'review' && review > 0 && <span className="nav-badge" aria-label={`${review} czeka na weryfikację`}>{review}</span>}{n.badge === 'learn' && learn > 0 && <span className="nav-badge soft" aria-label={`${learn} uwag czeka na naukę`}>{learn}</span>}
+                  </NavLink>
+                ))}
+              </div>
+            ))}
+          </nav>
+        )}
+        {admin && (
+          <nav aria-label="Administracja" className="nav-group admin-nav">
+            <span className="nav-group-label">Administracja</span>
+            {ADMIN.map(n => <NavLink key={n.to} to={n.to} className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>{n.label}</NavLink>)}
+          </nav>
+        )}
         <div className="help-links">
           <NavLink to="/pomoc" className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>Instrukcja</NavLink>
           {loc.pathname !== '/pomoc' && <button className="nav-link help-btn" onClick={() => setHelp(v => !v)} aria-expanded={help}>? Pomoc do tego ekranu</button>}
@@ -62,7 +86,7 @@ export default function Layout({ profile }) {
         </div>
       </aside>
       <main className="content">
-        <Outlet />
+        <Outlet context={{ vis, reloadVis }} />
       </main>
       <HelpDrawer open={help && loc.pathname !== '/pomoc'} onClose={() => setHelp(false)} />
       <JobOverlay />
