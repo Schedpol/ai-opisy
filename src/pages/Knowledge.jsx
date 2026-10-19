@@ -201,10 +201,55 @@ function Technologies({ data, admin, onChanged }) {
       {data.techs.filter(c => c.parent_id === t.id).length > 0 && <ul>{data.techs.filter(c => c.parent_id === t.id).map(c => <Row key={c.id} t={c} child />)}</ul>}
     </li>
   )
+  // nazwy technologii użyte w faktach lub rodzinach, których nie ma w słowniku (np. „Antibac” z wyciągniętego dokumentu)
+  const known = new Set(data.techs.map(t => t.name.toLowerCase()))
+  const orphanNames = [...new Set([...data.facts.filter(x => x.level === 'technologia' && x.technology).map(x => x.technology.trim()), ...data.families.flatMap(fm => fm.technologies || [])])]
+    .filter(n => n && !known.has(n.toLowerCase())).sort((a, b) => a.localeCompare(b, 'pl'))
+  const orphanFacts = n => data.facts.filter(x => x.level === 'technologia' && String(x.technology || '').trim().toLowerCase() === n.toLowerCase())
+  const orphanFams = n => data.families.filter(fm => (fm.technologies || []).some(t => t.toLowerCase() === n.toLowerCase()))
+  async function moveOrphan(name, targetId) {
+    const target = data.techs.find(t => t.id === targetId); if (!target) return
+    const parent = data.techs.find(t => t.id === target.parent_id)
+    try {
+      const ids = orphanFacts(name).map(x => x.id)
+      if (ids.length) { const e = await supabase.from('kb_facts').update({ technology: target.name }).in('id', ids); if (e.error) throw e.error }
+      for (const fm of orphanFams(name)) {
+        const next = [...new Set([...(fm.technologies || []).filter(t => t.toLowerCase() !== name.toLowerCase()), target.name, ...(parent ? [parent.name] : [])])].sort()
+        const e = await supabase.from('product_families').update({ technologies: next }).eq('id', fm.id); if (e.error) throw e.error
+      }
+      setMsg({ type: 'ok', text: `„${name}” → „${target.name}”: przeniesiono ${odm(ids.length, 'fakt', 'fakty', 'faktów')}, poprawiono ${odm(orphanFams(name).length, 'rodzinę', 'rodziny', 'rodzin')}.` }); onChanged()
+    } catch (e) { setMsg({ type: 'error', text: plError(e.message) }) }
+  }
+  async function adoptOrphan(name, parentId) {
+    const parent = data.techs.find(t => t.id === parentId)
+    const brand_id = parent?.brand_id || data.brands.find(b => b.name === 'Aedler')?.id || data.brands[0]?.id
+    const { error } = await supabase.from('kb_technologies').insert({ brand_id, name, parent_id: parentId || null, sort: data.techs.length + 1 })
+    setMsg(error ? { type: 'error', text: plError(error.message) } : { type: 'ok', text: `„${name}” dodano do słownika${parent ? ` jako odmianę „${parent.name}”` : ''}. Fakty trafią do rodzin, które mają tę technologię przypisaną.` })
+    if (!error) onChanged()
+  }
+  const Orphan = ({ name }) => {
+    const [target, setTarget] = useState('')
+    const nf = orphanFacts(name).length, nr = orphanFams(name).length
+    return (
+      <li className="orphan">
+        <div><strong>{name}</strong> <span className="muted small">{odm(nf, 'fakt', 'fakty', 'faktów')} · {odm(nr, 'rodzina', 'rodziny', 'rodzin')}{nf && !nr ? ' · fakty nie trafiają do żadnego opisu' : ''}</span></div>
+        {admin && <div className="row-actions">
+          <select value={target} onChange={e => setTarget(e.target.value)} aria-label={`Technologia docelowa dla ${name}`}><option value="">wybierz technologię…</option>{data.techs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select>
+          <button className="btn ghost small-btn" disabled={!target} onClick={() => moveOrphan(name, target)}>Przenieś do wybranej</button>
+          <button className="link-dark small" onClick={() => adoptOrphan(name, target)}>{target ? 'albo dodaj jako jej odmianę' : 'albo dodaj do słownika'}</button>
+        </div>}
+      </li>
+    )
+  }
   return (
-    <details className="panel tech-panel">
-      <summary><strong>Technologie</strong> <span className="muted small">{roots.map(r => r.name).join(' · ') || 'brak'} – fakty o technologii nadrzędnej trafiają też do jej odmian</span></summary>
+    <details className="panel tech-panel" open={orphanNames.length > 0 || undefined}>
+      <summary><strong>Technologie</strong> <span className="muted small">{roots.map(r => r.name).join(' · ') || 'brak'} – fakty o technologii nadrzędnej trafiają też do jej odmian</span>{orphanNames.length > 0 && <span className="tag warn">{orphanNames.length} spoza słownika</span>}</summary>
       <ul className="tech-tree">{roots.map(t => <Row key={t.id} t={t} />)}</ul>
+      {orphanNames.length > 0 && <div className="orphans">
+        <strong>Spoza słownika</strong>
+        <p className="muted small">Te nazwy są użyte w faktach lub przypisaniach rodzin, ale nie ma ich w słowniku technologii – najczęściej pochodzą z dokumentów wgranych do Księgi wiedzy. Przenieś je do właściwej technologii albo dodaj do słownika.</p>
+        <ul>{orphanNames.map(n => <Orphan key={n} name={n} />)}</ul>
+      </div>}
       <p className="muted small">Rodziny dostają technologie automatycznie przy imporcie – według kategorii z PIM (np. brodziki kompozytowe) albo serii (np. Standard Plus). Ręcznie dopisane technologie (ekran Produkty) zostają.</p>
       {admin && <>
         <div className="row-actions"><button className="btn ghost small-btn" onClick={assign}>Przypisz rodzinom</button></div>
@@ -245,7 +290,7 @@ export default function Knowledge({ profile }) {
     if (!data) return null
     const uniq = arr => [...new Set(arr.filter(Boolean).map(s => s.trim()))].sort()
     return { brands: data.brands, families: data.families,
-      technologies: uniq([...data.techs.map(t => t.name), ...data.facts.map(f => f.technology), ...data.families.flatMap(f => f.technologies || [])]),
+      technologies: data.techs.length ? uniq(data.techs.map(t => t.name)) : uniq([...data.facts.map(f => f.technology), ...data.families.flatMap(f => f.technologies || [])]),
       series: uniq([...data.facts.map(f => f.series), ...data.families.map(f => f.series)]) }
   }, [data])
 

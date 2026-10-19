@@ -608,3 +608,7 @@ a .dnode.sku:hover rect:first-child { stroke: var(--action); }
 .tech-tree ul { list-style: none; padding-left: 22px; margin: 6px 0 0; display: flex; flex-direction: column; gap: 6px; border-left: 2px solid var(--line); }
 .tech.child { padding-left: 10px; }
 .tech-form { align-items: end; }
+.orphans { margin-top: 14px; padding: 12px 14px; border-radius: 8px; background: #FFF8EC; }
+.orphans ul { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 10px; }
+.orphan .row-actions { margin: 6px 0 0; }
+.tech-panel summary .tag { margin-left: 8px; }
