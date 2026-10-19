@@ -111,8 +111,9 @@ export default function Prices({ profile }) {
     setBusy(true); setMsg(null)
     try {
       const r = await runJob('dealavo_sync', {}, { url: DATA_URL, timeoutSec: 300 })
-      const ref = /suggested/i.test(r?.reference || '') ? 'ceny sugerowanej' : r?.reference === 'Catalogue Price' ? 'ceny katalogowej' : r?.reference === 'Price' ? 'ceny Waszego sklepu' : null
-      setMsg({ type: r?.has_min_price === false ? 'hint' : 'ok', text: `Pobrano aktualizację z ${when(r?.update_time)}: ${r?.rows ?? '?'} dostępnych ofert w raporcie, ${r?.tracked ?? '?'} w kanałach śledzonych podmiotów.${ref ? ` Rozbieżność liczona od ${ref}.` : ''}${r?.has_min_price === false ? ' Uwaga: konto Dealavo nie ma Waszych cen minimalnych („Minimum price 30 days” to najniższa cena z 30 dni, nie cena minimalna) – naruszeń nie da się jeszcze policzyć.' : ''}` }); load()
+      const refName = /suggested/i.test(r?.reference || '') ? 'ceny katalogowej (w API Dealavo: „Suggested price”)' : r?.reference === 'Catalogue Price' ? 'ceny katalogowej' : r?.reference === 'Price' ? 'ceny Waszego sklepu' : null
+      const sameMin = r?.min_price_column && r.min_price_column === r.reference
+      setMsg({ type: r?.has_min_price === false ? 'hint' : 'ok', text: `Pobrano aktualizację z ${when(r?.update_time)}: ${r?.rows ?? '?'} dostępnych ofert${r?.pages ? ` (${r.pages} ${r.pages === 1 ? 'strona' : 'strony'})` : ''}, ${r?.tracked ?? '?'} w kanałach śledzonych podmiotów.${refName ? ` Rozbieżność${sameMin ? ' i naruszenia ceny minimalnej' : ''} liczone od ${refName}.` : ''}${r?.has_min_price === false ? ' Uwaga: brak cen minimalnych – naruszeń nie da się policzyć.' : ''}` }); load()
     } catch (e) { setMsg({ type: 'error', text: /nie obsługuje zadania|kod 404/.test(e.message) ? 'Workflow „Studio – dane rynkowe” nie jest jeszcze włączony w n8n.' : plError(e.message) }) } finally { setBusy(false) }
   }
   function exportCsv() {
@@ -126,12 +127,13 @@ export default function Prices({ profile }) {
   const chOf = id => d.channels.filter(c => c.partner_id === id)
   const unmapped = list.filter(p => !chOf(p.id).length).length
   const cur = d.partners.find(p => p.id === sel)
+  const sameMin = (offers || []).length > 0 && offers.every(o => o.min_price === null || Number(o.min_price) === Number(o.price))
   const shown = (offers || []).filter(o => !onlyBelow || o.below_min).sort((a, b) => (b.below_min - a.below_min) || ((a.gap_pct ?? 0) - (b.gap_pct ?? 0)))
 
   return (
     <section className="page wide">
       <h1>Ceny u partnerów</h1>
-      <p className="muted lead">Dane z Dealavo (Polska): ceny dostępnych ofert u partnerów wobec ceny sugerowanej i cen minimalnych. Rozbieżność bez kosztu wysyłki; wartość ujemna = partner sprzedaje taniej.</p>
+      <p className="muted lead">Dane z Dealavo (Polska): ceny dostępnych ofert u partnerów wobec Waszej ceny katalogowej, która jest ceną minimalną. Rozbieżność bez kosztu wysyłki; wartość ujemna = oferta poniżej ceny katalogowej (naruszenie).</p>
       <div className="panel">
         <div className="prices-head">
           <span>{d.last ? <>Ostatnia aktualizacja Dealavo: <strong>{when(d.last)}</strong></> : <span className="muted">Dane z Dealavo nie były jeszcze pobrane.</span>}</span>
@@ -173,7 +175,7 @@ export default function Prices({ profile }) {
           {offers === null ? <DrainLoader /> : offers.length === 0 ? <p className="muted">Brak ofert {chOf(cur.id).length ? 'w ostatniej aktualizacji' : '– najpierw dodaj kanały'}.</p> : <>
             <label className="check small"><input type="checkbox" checked={onlyBelow} onChange={e => setOnlyBelow(e.target.checked)} /> tylko poniżej ceny minimalnej</label>
             <div className="table-wrap"><table className="compact">
-              <thead><tr><th>Produkt</th><th>Kanał</th><th className="num-cell">Cena partnera</th><th className="num-cell">Wasza cena</th><th className="num-cell">Rozbieżność</th><th className="num-cell">Cena min.</th><th>Status</th></tr></thead>
+              <thead><tr><th>Produkt</th><th>Kanał</th><th className="num-cell">Cena partnera</th><th className="num-cell">{sameMin ? 'Cena katalogowa (min.)' : 'Cena katalogowa'}</th><th className="num-cell">Rozbieżność</th>{!sameMin && <th className="num-cell">Cena min.</th>}<th>Status</th></tr></thead>
               <tbody>{shown.map(o => (
                 <tr key={o.id} className={o.below_min ? 'below-min' : ''}>
                   <td>{o.url ? <a href={o.url} target="_blank" rel="noreferrer">{o.article || o.product_id}</a> : (o.article || o.product_id)}{o.ean && <span className="muted small mono"> {o.ean}</span>}</td>
@@ -181,7 +183,7 @@ export default function Prices({ profile }) {
                   <td className="num-cell">{zl(o.retailer_price)}</td>
                   <td className="num-cell">{zl(o.price)}</td>
                   <td className={'num-cell' + (o.gap_pct < 0 ? ' neg' : '')}>{pct(o.gap_pct)}</td>
-                  <td className="num-cell">{zl(o.min_price)}</td>
+                  {!sameMin && <td className="num-cell">{zl(o.min_price)}</td>}
                   <td className="small">{!o.available ? <span className="muted">niedostępna</span> : o.below_min ? <strong className="crit-text">poniżej min.</strong> : !(o.min_price > 0) ? <span className="muted">brak ceny min.</span> : 'OK'}</td>
                 </tr>
               ))}</tbody>
