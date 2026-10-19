@@ -114,7 +114,7 @@ export default function Prices({ profile }) {
       const refName = /suggested/i.test(r?.reference || '') ? 'ceny katalogowej (w API Dealavo: „Suggested price”)' : r?.reference === 'Catalogue Price' ? 'ceny katalogowej' : r?.reference === 'Price' ? 'ceny Waszego sklepu' : null
       const sameMin = r?.min_price_column && r.min_price_column === r.reference
       setMsg({ type: r?.has_min_price === false ? 'hint' : 'ok', text: `Pobrano aktualizację z ${when(r?.update_time)}: ${r?.rows ?? '?'} dostępnych ofert${r?.pages ? ` (${r.pages} ${r.pages === 1 ? 'strona' : 'strony'})` : ''}, ${r?.tracked ?? '?'} w kanałach śledzonych podmiotów.${refName ? ` Rozbieżność${sameMin ? ' i naruszenia ceny minimalnej' : ''} liczone od ${refName}.` : ''}${r?.has_min_price === false ? ' Uwaga: brak cen minimalnych – naruszeń nie da się policzyć.' : ''}` }); load()
-    } catch (e) { setMsg({ type: 'error', text: /nie obsługuje zadania|kod 404/.test(e.message) ? 'Workflow „Studio – dane rynkowe” nie jest jeszcze włączony w n8n.' : plError(e.message) }) } finally { setBusy(false) }
+    } catch (e) { setMsg({ type: 'error', text: /^n8n odrzucił zadanie \(kod 404\)/.test(e.message) ? 'n8n nie zna adresu „studio-dane” – workflow „Studio – dane rynkowe” nie jest aktywny.' : plError(e.message) }) } finally { setBusy(false) }
   }
   function exportCsv() {
     const rows = d.partners.filter(p => p.active).map(p => { const s = d.stats[p.id] || {}; return [p.name, KIND[p.kind], d.channels.filter(c => c.partner_id === p.id).map(c => `${c.label}: ${c.retailer}`).join(' | '), s.available_offers ?? '', s.products ?? '', s.avg_gap_pct ?? '', s.median_gap_pct ?? '', s.below_min_products ?? '', s.missing_min_products ?? ''] })
