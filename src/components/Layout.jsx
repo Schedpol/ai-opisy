@@ -9,7 +9,7 @@ import { supabase, ROLE_LABELS } from '../supabase.js'
 const GROUPS = [
   { label: 'Start', items: [{ to: '/', label: 'Dashboard', end: true }] },
   { label: 'Produkty', items: [{ to: '/drzewo', label: 'Drzewo produktów' }, { to: '/produkty', label: 'Produkty' }] },
-  { label: 'Przygotowanie treści', items: [{ to: '/wiedza', label: 'Księga wiedzy' }, { to: '/frazy', label: 'Frazy kluczowe' }, { to: '/szablony', label: 'Szablony' }, { to: '/biblioteka', label: 'Biblioteka grafik' }] },
+  { label: 'Przygotowanie treści', items: [{ to: '/wiedza', label: 'Księga wiedzy' }, { to: '/frazy', label: 'Frazy kluczowe' }, { to: '/szablony', label: 'Szablony' }, { to: '/biblioteka', label: 'Biblioteka grafik' }, { to: '/grafiki', label: 'Grafiki na FTP' }] },
   { label: 'Kontrola i publikacja', items: [{ to: '/weryfikacja', label: 'Weryfikacja', badge: 'review' }, { to: '/nauka', label: 'Nauka z uwag', badge: 'learn' }, { to: '/publikacja', label: 'Publikacja' }, { to: '/parametry', label: 'Parametry Base' }] },
   { label: 'Konfiguracja', admin: true, items: [{ to: '/slownik', label: 'Słownik importu' }, { to: '/reguly', label: 'Reguły QA' }, { to: '/ustawienia', label: 'Ustawienia' }, { to: '/uzytkownicy', label: 'Użytkownicy' }] },
 ]

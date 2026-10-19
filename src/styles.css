@@ -628,3 +628,30 @@ a .dnode.sku:hover rect:first-child { stroke: var(--action); }
 .plan ul { margin: 8px 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
 .ch-plus { color: var(--ok); } .ch-minus { color: var(--error, #B42318); }
 .add-row td { background: #FBFCFE; }
+
+/* Grafiki na FTP */
+.img-top { grid-template-columns: minmax(0, 2fr) minmax(280px, 3fr); }
+.img-summary { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.img-summary .bar { flex: 1; min-width: 160px; }
+.img-bar { width: 110px; height: 8px; border-radius: 4px; }
+.img-count { font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink-soft); margin-left: auto; white-space: nowrap; }
+.img-cats { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.img-cats li { display: flex; align-items: center; gap: 10px; }
+.img-cats .link-dark { text-align: left; }
+.img-tree .tree-head { display: flex; align-items: center; gap: 10px; width: 100%; background: none; border: none; padding: 8px 4px; cursor: pointer; text-align: left; font: inherit; border-bottom: 1px solid var(--line); }
+.img-node.lvl-0 > .tree-head .tree-label { font-weight: 700; }
+.img-node.lvl-1 { padding-left: 22px; }
+.img-node.lvl-1 > .tree-head .tree-label { font-weight: 600; }
+.ftp-row { display: block; padding: 10px 6px 12px 44px; border-bottom: 1px solid #EEF1F5; }
+.ftp-row-head { font-size: 14px; margin-bottom: 8px; }
+.filters input[type=checkbox] { min-width: 0; }
+.img-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.img-chip { display: inline-flex; flex-direction: column; gap: 2px; padding: 6px 10px; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none; border: 1px solid transparent; }
+.img-chip code { font-size: 11px; font-weight: 400; background: none; padding: 0; color: inherit; opacity: .85; }
+.img-chip.ok { background: #EAF5EF; color: #1F5E41; border-color: #BFE0CD; }
+.img-chip.ok:hover { border-color: var(--ok); }
+.img-chip.brak { background: #FBEDEC; color: #8E1F15; border-color: #F1C4BF; }
+.img-chip.niespr { background: #F2F4F8; color: var(--ink-soft); border-color: #DDE2EA; }
+.legend-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.legend-row .img-chip { padding: 2px 8px; font-size: 12px; }
+@media (max-width: 1100px) { .img-top { grid-template-columns: 1fr; } }

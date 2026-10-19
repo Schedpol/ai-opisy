@@ -28,6 +28,7 @@ Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne 
 | [Słownik importu](/slownik) | reguły odczytu atrybutów z SKU: kolor (np. B/SC = Black Scale), powłoka (AP1), odpływ, kształt, zestaw z nośnikiem (/NO), role zdjęć | admin |
 | [Księga wiedzy](/wiedza) | fakty na 6 poziomach: marka, kategoria (np. brodziki, wanny), technologia (ze słownika marki), seria (np. Antis), model (seria w kolorze), wariant (SKU); wgrywanie DOCX z automatycznym wyciąganiem faktów | dodaje generujący, zatwierdza akceptujący |
 | [Szablony](/szablony) | układ opisu: kanał › rynek › kategoria; sekcje, grafiki (z serwera wg konwencji), format HTML (eMAG / Kaufland / własny) | admin |
+| [Grafiki na FTP](/grafiki) | drzewo kategoria › seria › kolor › kształt z plikami z konwencji (packshot wg odpływu, aranżacje, infografika, rysunek techniczny): co jest na serwerze, a co trzeba wgrać; lista braków do pobrania | sprawdza każdy, wgrywa grafik |
 | [Biblioteka grafik](/biblioteka) | banery i grafiki wspólne dla marki, technologii, serii lub modelu | admin |
 | [Frazy kluczowe](/frazy) | banki fraz per kategoria i język (DataForSEO), frazy startowe, wykluczenia | generujący; frazy startowe zatwierdza akceptujący |
 | [Weryfikacja](/weryfikacja) | przegląd opisów: treść w języku rynku + polskie tłumaczenie kontrolne, uwagi QA, akceptacja, generacja wariantów | akceptujący |
@@ -136,6 +137,11 @@ export const SCREEN_HELP = [
   { path: '/szablony', title: 'Szablony', section: 'nowy-rynek-lub-kanal-sprzedazy-admin', md: `- Wybierz kanał, rynek i kategorię; kategoria bez szablonu korzysta z domyślnego.
 - Grafiki „z serwera wg konwencji” składają link z atrybutów wariantu; status pokazuje, czy plik istnieje.
 - **Format HTML** – eMAG (bogaty), Kaufland (prosty) albo własny szkielet; „Pokaż kod HTML” pokazuje, co pójdzie do Base.` },
+  { path: '/grafiki', title: 'Grafiki na FTP', section: 'jakosc', md: `- **Sprawdź niesprawdzone** – n8n sprawdza na serwerze pliki, których jeszcze nie sprawdzano (pobiera tylko 1. bajt, więc trwa to krótko).
+- Zielone – plik jest (kliknij, żeby otworzyć); czerwone – brak, z dokładną ścieżką, pod którą trzeba go wgrać.
+- Pliki są wspólne dla rozmiarów: przy każdym widać SKU, które z niego korzystają.
+- **Pobierz listę braków (CSV)** – do przekazania osobie przygotowującej grafiki.
+- Po wgraniu nowych plików: **Sprawdź wszystkie ponownie**.` },
   { path: '/biblioteka', title: 'Biblioteka grafik', section: 'ekrany', md: `- Grafiki wspólne (np. banery) przypisane do marki, technologii, serii lub modelu.
 - Szablon z obrazkiem „z biblioteki” bierze najbardziej szczegółową pasującą grafikę.` },
   { path: '/frazy', title: 'Frazy kluczowe', section: 'nowa-kategoria-np-odplywy-liniowe-wanny', md: `- Bank = kategoria × język. Nazwa kategorii jak w PIM, małymi literami.
