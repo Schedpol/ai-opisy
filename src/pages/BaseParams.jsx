@@ -134,6 +134,7 @@ function Result({ res }) {
       <p>
         {plN(changed.length, 'produkt wymaga', 'produkty wymagają', 'produktów wymaga')} zmian · {plN((r.items || []).filter(x => x.found && !x.changes.length).length, 'produkt jest', 'produkty są', 'produktów jest')} aktualnych
         {r.not_found ? ` · ${r.not_found} nie znaleziono w Base` : ''}
+        {r.skipped ? ` · ${r.skipped} pominięto (brak parametrów do wysłania${r.lang && r.lang !== 'pl' ? ' – brak zatwierdzonych tłumaczeń' : ''})` : ''}
         {r.updated !== undefined && <> · <strong>zapisano: {r.updated}</strong></>}
         {r.dry_run && r.mode === 'write' && <> · w trybie próbnym zapisanoby {r.would_update}. Ustaw DRY_RUN = false w n8n (workflow publikacji), żeby zapisywać.</>}
       </p>
@@ -255,18 +256,28 @@ export default function BaseParams({ profile }) {
     if (!chosen.length) return
     if (mode === 'write' && !confirm(`Zapisać parametry ${plN(chosen.length, 'produktu', 'produktów', 'produktów')} w Base${lang !== 'pl' ? ` (język: ${lang.toUpperCase()})` : ''}?\n\nZmienione zostaną tylko parametry z mapowania; pozostałe parametry produktów zostaną bez zmian. Puste wartości nie są wysyłane.`)) return
     setRes(null)
-    const all = { mode, items: [], not_found: 0, to_change: 0, updated: mode === 'write' ? 0 : undefined, failed: [], warnings: [], dry_run: false, would_update: 0 }
+    // produkty bez żadnego parametru do wysłania (np. brak zatwierdzonych tłumaczeń) – nie wysyłamy pustego zadania do n8n
+    const ready = chosen.filter(x => Object.keys(x.send || {}).length), empty = chosen.length - ready.length
+    if (!ready.length) {
+      setRes({ error: lang !== 'pl'
+        ? `Żaden z zaznaczonych produktów nie ma parametrów do wysłania w języku ${lang.toUpperCase()}: brakuje zatwierdzonych nazw parametrów albo tłumaczeń wartości. Kliknij „Przetłumacz brakujące (AI)”, a potem zatwierdź propozycje w panelu „Tłumaczenia”.`
+        : 'Żaden z zaznaczonych produktów nie ma wyliczonych wartości parametrów. Sprawdź mapowanie parametrów i czy lista z PIM jest wgrana (Drzewo produktów).' })
+      return
+    }
+    const all = { mode, lang, items: [], not_found: 0, to_change: 0, updated: mode === 'write' ? 0 : undefined, failed: [], warnings: [], dry_run: false, would_update: 0 }
     try {
       for (let i = 0; i < chosen.length; i += CHUNK) {
         const part = chosen.slice(i, i + CHUNK)
         setBusy(`${mode === 'write' ? 'Zapisywanie' : 'Porównywanie'}: ${i + 1}–${i + part.length} z ${chosen.length}…`)
-        const r = await runJob('params_sync', { mode, lang, items: part.map(x => ({ sku: x.sku, features: x.send })).filter(x => Object.keys(x.features).length) }, { url: PUBLISH_URL, timeoutSec: 60 + part.length * 3 })
+        const items = part.map(x => ({ sku: x.sku, features: x.send })).filter(x => Object.keys(x.features).length)
+        if (!items.length) continue
+        const r = await runJob('params_sync', { mode, lang, items }, { url: PUBLISH_URL, timeoutSec: 60 + part.length * 3 })
         const x = r.result || r
         all.items.push(...(x.items || [])); all.not_found += x.not_found || 0; all.to_change += x.to_change || 0
         if (x.updated !== undefined) all.updated += x.updated
         all.failed.push(...(x.failed || [])); all.warnings.push(...(x.warnings || [])); all.dry_run = all.dry_run || !!x.dry_run; all.would_update += x.would_update || 0
       }
-      setRes({ result: all })
+      setRes({ result: { ...all, skipped: empty } })
     } catch (e) { setRes({ error: plError(e.message) }) } finally { setBusy('') }
   }
 
