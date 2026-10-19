@@ -120,7 +120,7 @@ Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne 
 // Pomoc kontekstowa: krótko, co robić na danym ekranie + link do właściwej części instrukcji
 export const SCREEN_HELP = [
   { path: '/ceny', title: 'Ceny u partnerów (Dealavo)', section: 'role', md: `- Ranking partnerów: średnia i mediana rozbieżności ceny (dostępne oferty, bez wysyłki; ujemna = taniej) oraz liczba produktów poniżej ceny minimalnej.
-- **Nazwy w Dealavo:** kliknij partnera i przypisz jego nazwy z Dealavo (sklep, konto na Allegro). Bez nich oferty partnera nie są liczone. Podpowiedzi zatwierdzaj świadomie – zwłaszcza przy krótkich nazwach.
+- **Podmioty i kanały:** kliknij podmiot, żeby zmienić jego nazwę i typ oraz dodać kanały – każdy z Twoją etykietą (np. „Allegro PL”, „Castorama”) i nazwą sprzedawcy w Dealavo. Wskaźniki podmiotu to suma kanałów; w szczegółach widać je też per kanał. Jedna nazwa z Dealavo może należeć tylko do jednego podmiotu.
 - **Pobierz z Dealavo** (admin) – pobiera ostatnią aktualizację i przelicza wskaźniki. Do bazy trafiają wskaźniki z każdej aktualizacji (historia) i oferty z ostatniej.` },
   { path: '/analityka', title: 'Analityka', section: 'role', md: `- Raporty Power BI osadzone w Studio. Przy pierwszym otwarciu Power BI poprosi o zalogowanie kontem firmowym Microsoft; potrzebna licencja Power BI Pro.
 - Admin dodaje raport linkiem z Power BI: Plik → Osadź raport → Witryna lub portal. Linki „Publikuj w internecie” są odrzucane, bo byłyby publiczne.` },

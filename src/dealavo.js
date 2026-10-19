@@ -66,3 +66,23 @@ export function aggregate(rows, partners, updateTime) {
   })
   return { offers, stats, retailers: [...retailers.values()] }
 }
+
+// Wskaźniki z listy ofert (te same wzory co w n8n) – do podziału na kanały w szczegółach podmiotu
+export function summarize(offers) {
+  const av = offers.filter(x => x.available), gaps = av.map(x => x.gap_pct).filter(x => x !== null && x !== undefined).map(Number)
+  return {
+    available_offers: av.length, products: new Set(av.map(x => x.product_id)).size,
+    avg_gap_pct: gaps.length ? r2(gaps.reduce((s, x) => s + x, 0) / gaps.length) : null, median_gap_pct: r2(median(gaps)),
+    below_min_products: new Set(av.filter(x => x.below_min).map(x => x.product_id)).size,
+    missing_min_products: new Set(av.filter(x => !(x.min_price > 0)).map(x => x.product_id)).size,
+  }
+}
+
+// Domyślna etykieta kanału z nazwy sprzedawcy w Dealavo, np. „sklep_xyz (allegro.pl)” → „Allegro PL”
+const DOMAINS = { 'allegro.pl': 'Allegro PL', 'allegro.cz': 'Allegro CZ', 'allegro.sk': 'Allegro SK', 'castorama.pl': 'Castorama', 'leroymerlin.pl': 'Leroy Merlin', 'obi.pl': 'OBI', 'empik.com': 'Empik', 'kaufland.pl': 'Kaufland PL', 'erli.pl': 'Erli', 'amazon.pl': 'Amazon PL', 'mediaexpert.pl': 'Media Expert', 'ceneo.pl': 'Ceneo' }
+export function defaultLabel(retailer, source) {
+  const m = String(retailer || '').match(/\(([^)]+)\)\s*$/)
+  if (m) { const dom = m[1].toLowerCase().trim(); return DOMAINS[dom] || dom }
+  if (source && !/^sklep$/i.test(source)) return String(source)
+  return 'Sklep internetowy'
+}
