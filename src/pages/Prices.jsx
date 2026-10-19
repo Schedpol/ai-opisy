@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase, plError, fetchAll } from '../supabase.js'
-import { runJob, PUBLISH_URL } from '../jobs.js'
+import { runJob, DATA_URL } from '../jobs.js'
 import { suggestions, summarize, defaultLabel } from '../dealavo.js'
 import DrainLoader from '../components/DrainLoader.jsx'
 
@@ -110,9 +110,9 @@ export default function Prices({ profile }) {
   async function sync() {
     setBusy(true); setMsg(null)
     try {
-      const r = await runJob('dealavo_sync', {}, { url: PUBLISH_URL, timeoutSec: 300 })
+      const r = await runJob('dealavo_sync', {}, { url: DATA_URL, timeoutSec: 300 })
       setMsg({ type: 'ok', text: `Pobrano aktualizację z ${when(r?.update_time)}: ${r?.rows ?? '?'} ofert w raporcie, ${r?.tracked ?? '?'} u śledzonych partnerów.` }); load()
-    } catch (e) { setMsg({ type: 'error', text: /nie obsługuje zadania/.test(e.message) ? 'Pobieranie z Dealavo nie jest jeszcze podłączone w n8n (czeka na dokumentację API).' : plError(e.message) }) } finally { setBusy(false) }
+    } catch (e) { setMsg({ type: 'error', text: /nie obsługuje zadania|kod 404/.test(e.message) ? 'Workflow „Studio – dane rynkowe” nie jest jeszcze włączony w n8n.' : plError(e.message) }) } finally { setBusy(false) }
   }
   function exportCsv() {
     const rows = d.partners.filter(p => p.active).map(p => { const s = d.stats[p.id] || {}; return [p.name, KIND[p.kind], d.channels.filter(c => c.partner_id === p.id).map(c => `${c.label}: ${c.retailer}`).join(' | '), s.available_offers ?? '', s.products ?? '', s.avg_gap_pct ?? '', s.median_gap_pct ?? '', s.below_min_products ?? '', s.missing_min_products ?? ''] })
