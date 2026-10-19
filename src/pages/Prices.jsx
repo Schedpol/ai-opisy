@@ -191,76 +191,95 @@ function FileImport({ d, onDone }) {
   )
 }
 
-// Uzupełnianie historii: kolejne aktualizacje kwartału jako osobne zadania (każde = jedno wykonanie n8n).
-// Już pobrane aktualizacje są pomijane, więc przerwane uzupełnianie można wznowić.
+// Uzupełnianie historii z API: najpierw lista dni (bez pobierania danych), potem każdy dzień jako osobne zadanie.
+// Dni sprzed daty początku pomiarów (nowy cennik w Dealavo) nie są pobierane.
+const qStart = q => `${q.slice(0, 4)}-${String((Number(q.slice(6)) - 1) * 3 + 1).padStart(2, '0')}-01`
+const qRange = q => { const y = Number(q.slice(0, 4)), n = Number(q.slice(6)); return [`${y}_${String((n - 1) * 3 + 1).padStart(2, '0')}`, n === 4 ? `${y + 1}_01` : `${y}_${String(n * 3 + 1).padStart(2, '0')}`] }
 function Backfill({ d, onDone }) {
+  const vf = d.validFrom ? `${d.validFrom.slice(0, 4)}-${d.validFrom.slice(5, 7)}-${d.validFrom.slice(8, 10)}` : null
   const [q, setQ] = useState('2026-Q3')
+  const [from, setFrom] = useState(vf && vf > qStart('2026-Q3') ? vf : qStart('2026-Q3'))
   const [cadence, setCadence] = useState('daily')
   const [st, setSt] = useState(null)
   const stop = useRef(false)
-  const have = () => new Set((d.allStats || []).map(x => x.update_time))
   const fmt = sec => sec >= 3600 ? `${Math.floor(sec / 3600)} h ${Math.round(sec % 3600 / 60)} min` : `${Math.max(1, Math.round(sec / 60))} min`
-  async function start() {
+  const changeQ = v => { setQ(v); const s0 = qStart(v); setFrom(vf && vf > s0 ? vf : s0) }
+  async function start(rebuild) {
+    const fromKey = from.replace(/-/g, '_')
+    if (rebuild && !confirm(`Przeliczyć ${q.replace('-', ' ')} od ${from.split('-').reverse().join('.')}?\n\nUsunie wszystkie wskaźniki i rejestr naruszeń z tego kwartału, a potem pobierze ponownie dni od tej daty (ok. 1 min na dzień). Data zostanie zapisana jako początek ważnych pomiarów.`)) return
     stop.current = false
-    const loaded = have(), t0 = Date.now()
-    let targets = null, done = 0, skipped = 0, errors = [], ran = 0
-    const step = async i => {
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try { return await runJob('dealavo_sync', { backfill: q, cadence, step: i }, { url: DATA_URL, timeoutSec: 300 }) }
-        catch (e) { if (attempt === 2) throw e }
-      }
-    }
+    let targets = [], done = 0, skipped = 0, errors = [], ran = 0
+    const t0 = Date.now()
+    const job = async payload => { for (let a = 1; a <= 2; a++) { try { return await runJob('dealavo_sync', payload, { url: DATA_URL, timeoutSec: 300 }) } catch (e) { if (a === 2) throw e } } }
     try {
-      setSt({ running: true, done: 0, total: null, text: 'Pobieranie listy aktualizacji z Dealavo…' })
-      const r0 = await step(0); targets = r0.targets || []; ran++; done = 1
-      for (let i = 1; i < targets.length; i++) {
+      if (rebuild) {
+        setSt({ running: true, text: 'Czyszczenie danych kwartału…' })
+        const [lo, hi] = qRange(q)
+        const a1 = await supabase.from('dealavo_stats').delete().gte('update_time', lo).lt('update_time', hi); if (a1.error) throw a1.error
+        const a2 = await supabase.from('dealavo_violations').delete().eq('quarter', q); if (a2.error) throw a2.error
+        const a3 = await supabase.from('dealavo_settings').upsert({ key: 'valid_from', value: fromKey, updated_at: new Date().toISOString() }); if (a3.error) throw a3.error
+      }
+      setSt({ running: true, text: 'Pobieranie listy dni z Dealavo…' })
+      targets = (await job({ backfill: q, cadence, from: fromKey, list_only: true })).targets || []
+      const loaded = rebuild ? new Set() : new Set((d.allStats || []).map(x => x.update_time))
+      for (let i = 0; i < targets.length; i++) {
         if (stop.current) break
         if (loaded.has(targets[i])) { skipped++; done++; continue }
-        const left = (targets.length - i) * (Date.now() - t0) / Math.max(1, ran)
+        const left = (targets.length - i) * (ran ? (Date.now() - t0) / ran : 60000)
         setSt({ running: true, done, total: targets.length, skipped, errors, text: `Aktualizacja z ${when(targets[i])} · pozostało ok. ${fmt(left / 1000)}` })
-        try { await step(i); ran++ } catch (e) { errors = [...errors, `${when(targets[i])}: ${plError(e.message)}`] }
+        try {
+          const r = await job({ backfill: q, cadence, from: fromKey, step: i })
+          if (r.update_time !== targets[i]) throw new Error(`n8n pobrał ${when(r.update_time)} zamiast ${when(targets[i])} – przerwano`)
+          ran++
+        } catch (e) { errors = [...errors, `${when(targets[i])}: ${plError(e.message)}`]; if (/przerwano/.test(e.message)) break }
         done++
       }
-      setSt({ running: false, done, total: targets.length, skipped, errors, text: stop.current ? 'Zatrzymano – możesz wznowić później, pobrane dni zostaną pominięte.' : `Zakończono: ${targets.length} ${cadence === 'daily' ? 'dni' : 'tygodni'} z ${q.replace('-', ' ')}${skipped ? ` (${skipped} było już pobranych)` : ''}.` })
-    } catch (e) { setSt({ running: false, done, total: targets?.length || null, errors, text: plError(e.message), failed: true }) }
+      setSt({ running: false, done, total: targets.length, skipped, errors, text: stop.current ? 'Zatrzymano – możesz wznowić („Uzupełnij”), pobrane dni zostaną pominięte.' : `Zakończono: ${targets.length} dni z ${q.replace('-', ' ')} od ${from.split('-').reverse().join('.')}${skipped ? ` (${skipped} było już pobranych)` : ''}.` })
+    } catch (e) { setSt({ running: false, done, total: targets.length || null, errors, text: plError(e.message), failed: true }) }
     onDone()
   }
   const pctDone = st?.total ? Math.round(100 * st.done / st.total) : 0
   return (
-    <details className="backfill" open={!!st}>
-      <summary><strong>Uzupełnij historię z Dealavo</strong> <span className="muted small">– wcześniejsze kwartały (admin)</span></summary>
-      <FileImport d={d} onDone={onDone} />
-      <h3>Z API Dealavo – kolejne aktualizacje przez n8n</h3>
-      <p className="muted small">Pobiera wskazane aktualizacje z Dealavo i zapisuje wskaźniki oraz naruszenia. Bieżące oferty nie zmieniają się. Każda aktualizacja to jedno wykonanie n8n (ok. 1–2 min); <strong>nie zamykaj tej karty</strong> w trakcie – po przerwaniu wznowisz od miejsca, w którym skończyłeś.</p>
+    <>
+      <p className="muted small">Pobiera kolejne aktualizacje z Dealavo przez n8n (ok. 1 min na dzień, każda to jedno wykonanie n8n) i zapisuje wskaźniki oraz naruszenia – bieżące oferty nie zmieniają się. Ceny katalogowe są z dnia pomiaru. <strong>Nie zamykaj tej karty</strong> w trakcie.</p>
       <div className="row-actions">
-        <label className="inline-label">Kwartał<select value={q} onChange={e => setQ(e.target.value)} disabled={st?.running}>{['2026-Q3', '2026-Q2', '2026-Q1'].map(x => <option key={x} value={x}>{x.replace('-', ' ')}</option>)}</select></label>
-        <label className="inline-label">Częstotliwość<select value={cadence} onChange={e => setCadence(e.target.value)} disabled={st?.running}><option value="daily">codziennie (ok. 90 pobrań)</option><option value="weekly">co tydzień (ok. 13 pobrań)</option></select></label>
-        {st?.running ? <button className="btn ghost" onClick={() => { stop.current = true }}>Zatrzymaj po bieżącym</button> : <button className="btn" onClick={start}>{st && !st.failed && st.done < (st.total || 0) ? 'Wznów' : 'Uzupełnij'}</button>}
+        <label className="inline-label">Kwartał<select value={q} onChange={e => changeQ(e.target.value)} disabled={st?.running}>{['2026-Q3', '2026-Q2', '2026-Q1'].map(x => <option key={x} value={x}>{x.replace('-', ' ')}</option>)}</select></label>
+        <label className="inline-label">Od dnia<input type="date" value={from} min={qStart(q)} onChange={e => setFrom(e.target.value)} disabled={st?.running} /></label>
+        <label className="inline-label">Częstotliwość<select value={cadence} onChange={e => setCadence(e.target.value)} disabled={st?.running}><option value="daily">codziennie</option><option value="weekly">co tydzień</option></select></label>
+      </div>
+      <div className="row-actions">
+        {st?.running ? <button className="btn ghost" onClick={() => { stop.current = true }}>Zatrzymaj po bieżącym</button> : <>
+          <button className="btn" onClick={() => start(false)}>Uzupełnij brakujące dni</button>
+          <button className="btn ghost danger-btn" onClick={() => start(true)}>Przelicz kwartał od tego dnia</button>
+        </>}
       </div>
       {st && <>
         {st.total ? <div className="usage-row"><span className="bar usage-bar"><span style={{ width: `${pctDone}%` }} /></span><span className="muted small">{st.done} / {st.total}</span></div> : null}
         <p className={st.failed ? 'error' : st.running ? 'muted working' : 'ok'} role="status">{st.text}</p>
-        {st.errors?.length > 0 && <details><summary className="small warn-text">{st.errors.length} nieudanych – zostaną ponowione przy wznowieniu</summary><ul className="small">{st.errors.map(x => <li key={x}>{x}</li>)}</ul></details>}
+        {st.errors?.length > 0 && <details><summary className="small warn-text">{st.errors.length} nieudanych – „Uzupełnij brakujące dni” spróbuje ponownie</summary><ul className="small">{st.errors.map(x => <li key={x}>{x}</li>)}</ul></details>}
       </>}
-    </details>
+    </>
   )
 }
 
 function QuarterHistory({ d, onPick }) {
   const years = [...new Set([...(d.allStats || []).map(x => quarterOf(x.update_time)), ...(d.vcount || []).map(x => x.quarter)].filter(Boolean).map(q => q.slice(0, 4)))].sort().reverse()
   const [year, setYear] = useState(years[0] || String(new Date().getFullYear()))
-  const [metric, setMetric] = useState('naruszenia')
+  const [metric, setMetric] = useState('dziennie')
+  const [tol, setTol] = useState(0)
   if (!years.length) return <p className="muted">Historia pojawi się po pierwszych pobraniach – od teraz codziennie o 7:00.</p>
   const Q = [1, 2, 3, 4].map(n => `${year}-Q${n}`)
-  const viol = {}; for (const v of d.vcount || []) viol[`${v.partner_id}|${v.quarter}`] = (viol[`${v.partner_id}|${v.quarter}`] || 0) + 1
+  const viol = {}; for (const v of d.vcount || []) if (Number(v.max_below_pct || 0) > tol) viol[`${v.partner_id}|${v.quarter}`] = (viol[`${v.partner_id}|${v.quarter}`] || 0) + 1
+  const daily = {}; for (const x of d.allStats || []) { if (!(x.offers > 0)) continue; const k = `${x.partner_id}|${quarterOf(x.update_time)}`; (daily[k] = daily[k] || []).push(Number(x.below_min_products || 0)) }
   const gap = {}, runs = {}
   for (const x of d.allStats || []) { if (!(x.offers > 0)) continue; const k = `${x.partner_id}|${quarterOf(x.update_time)}`; (gap[k] = gap[k] || []).push(Number(x.avg_gap_pct || 0)) }
   for (const x of d.allStats || []) { const k = quarterOf(x.update_time); runs[k] = runs[k] || new Set(); runs[k].add(x.update_time) }
   const first = (d.allStats || []).reduce((m, x) => !m || x.update_time < m ? x.update_time : m, '')
   const list = d.partners.filter(p => p.active && Q.some(q => viol[`${p.id}|${q}`] || gap[`${p.id}|${q}`]))
-    .sort((a, b) => Q.reduce((s, q) => s + (viol[`${b.id}|${q}`] || 0), 0) - Q.reduce((s, q) => s + (viol[`${a.id}|${q}`] || 0), 0) || a.name.localeCompare(b.name, 'pl'))
+    .sort((a, b) => { const sc = p => metric === 'dziennie' ? Q.reduce((s2, q) => { const v = daily[`${p.id}|${q}`]; return s2 + (v ? v.reduce((x, y) => x + y, 0) / v.length : 0) }, 0) : Q.reduce((s2, q) => s2 + (viol[`${p.id}|${q}`] || 0), 0); return sc(b) - sc(a) || a.name.localeCompare(b.name, 'pl') })
   const cell = (p, q) => {
     if (metric === 'naruszenia') { const n = viol[`${p.id}|${q}`]; return gap[`${p.id}|${q}`] || n ? (n ? <strong className="crit-text">{n}</strong> : 0) : '—' }
+    if (metric === 'dziennie') { const a = daily[`${p.id}|${q}`]; if (!a) return '—'; const v = a.reduce((s2, x) => s2 + x, 0) / a.length; return v >= 0.05 ? <strong className="crit-text">{v.toLocaleString('pl-PL', { maximumFractionDigits: 1 })}</strong> : 0 }
     const g = gap[`${p.id}|${q}`]; return g ? pct(Math.round(g.reduce((s, x) => s + x, 0) / g.length * 100) / 100) : '—'
   }
   return (
@@ -268,11 +287,13 @@ function QuarterHistory({ d, onPick }) {
       <div className="row-actions">
         <label className="inline-label">Rok<select value={year} onChange={e => setYear(e.target.value)}>{years.map(y => <option key={y}>{y}</option>)}</select></label>
         <div className="seg" role="radiogroup">
-          <button className={metric === 'naruszenia' ? 'on' : ''} onClick={() => setMetric('naruszenia')}>Produkty poniżej ceny katalogowej</button>
+          <button className={metric === 'dziennie' ? 'on' : ''} onClick={() => setMetric('dziennie')}>Poniżej ceny – średnio na pobranie</button>
+          <button className={metric === 'naruszenia' ? 'on' : ''} onClick={() => setMetric('naruszenia')}>Poniżej ceny – choć raz w kwartale</button>
           <button className={metric === 'rozbieznosc' ? 'on' : ''} onClick={() => setMetric('rozbieznosc')}>Średnia rozbieżność</button>
         </div>
       </div>
-      <p className="muted small">{metric === 'naruszenia' ? 'Liczba różnych produktów, które w kwartale choć raz były poniżej ceny katalogowej.' : 'Średnia z rozbieżności zmierzonych w pobraniach w danym kwartale.'} Dane od {dayOf(first)}.</p>
+      {metric === 'naruszenia' && <label className="inline-label small">Tolerancja<select value={tol} onChange={e => setTol(Number(e.target.value))}>{[0, 1, 2, 3, 5, 10].map(t => <option key={t} value={t}>{t === 0 ? 'każde zejście poniżej' : `poniżej o więcej niż ${t}%`}</option>)}</select></label>}
+      <p className="muted small">{metric === 'dziennie' ? 'Ile produktów średnio w jednym pomiarze było poniżej ceny katalogowej – porównywalne między kwartałami niezależnie od liczby pobrań.' : metric === 'naruszenia' ? `Liczba różnych produktów, które w kwartale choć raz były poniżej ceny katalogowej${tol ? ` o więcej niż ${tol}%` : ''}. Rośnie z liczbą pobrań – do porównań między kwartałami użyj „średnio na pobranie”.` : 'Średnia z rozbieżności zmierzonych w pobraniach w danym kwartale.'} Dane od {dayOf(first)}.{d.validFrom ? ` Pomiary ważne od ${dayOf(d.validFrom + '_00_00')} (aktualny cennik w Dealavo).` : ''}</p>
       <div className="table-wrap"><table className="compact prices-table">
         <thead><tr><th>Podmiot</th>{Q.map(q => <th key={q} className="num-cell">{q.slice(5)}<span className="muted small"> · {runs[q]?.size || 0} pobr.</span></th>)}</tr></thead>
         <tbody>{list.map(p => <tr key={p.id} onClick={() => onPick(p.id)}><td>{p.name}{p.kind !== 'partner' && <span className="tag">{KIND[p.kind]}</span>}</td>{Q.map(q => <td key={q} className="num-cell">{cell(p, q)}</td>)}</tr>)}</tbody>
@@ -303,9 +324,10 @@ export default function Prices({ profile }) {
         fetchAll('dealavo_channels', '*').catch(e => { throw new Error(/dealavo_channels/.test(e.message) ? 'Brak tabeli kanałów – uruchom migrację 32_dealavo_kanaly.sql.' : e.message) }),
       ])
       if (p.error) throw p.error
-      const vi = await fetchAll('dealavo_violations', 'partner_id, quarter').catch(() => null)
+      const vi = await fetchAll('dealavo_violations', 'partner_id, quarter, max_below_pct').catch(() => null)
+      const vf = await supabase.from('dealavo_settings').select('value').eq('key', 'valid_from').maybeSingle()
       const last = st.reduce((m, s) => s.update_time > m ? s.update_time : m, '')
-      setD({ allStats: st, vcount: vi, channels: ch, partners: p.data, stats: Object.fromEntries(st.filter(s => s.update_time === last).map(s => [s.partner_id, s])), last, retailers: rt.sort((a, b) => b.offers - a.offers) })
+      setD({ validFrom: vf?.data?.value || null, allStats: st, vcount: vi, channels: ch, partners: p.data, stats: Object.fromEntries(st.filter(s => s.update_time === last).map(s => [s.partner_id, s])), last, retailers: rt.sort((a, b) => b.offers - a.offers) })
     } catch (e) { setErr(/migrację 32/.test(e.message) ? e.message : /dealavo_/.test(e.message) ? 'Brak tabel Dealavo – uruchom migrację 31_dealavo.sql.' : plError(e.message)) }
   }
   useEffect(() => { load() }, [])
@@ -385,7 +407,12 @@ export default function Prices({ profile }) {
       <div className="panel">
         <h2>Historia kwartalna</h2>
         <QuarterHistory d={d} onPick={id => { setSel(id); setTab('historia') }} />
-        {admin && <Backfill d={d} onDone={load} />}
+        {admin && <details className="backfill">
+          <summary><strong>Uzupełnij historię z Dealavo</strong> <span className="muted small">– wcześniejsze kwartały (admin)</span></summary>
+          <h3>Z API Dealavo – kolejne aktualizacje przez n8n (zalecane)</h3>
+          <Backfill d={d} onDone={load} />
+          <FileImport d={d} onDone={load} />
+        </details>}
       </div>
 
       {cur && (

@@ -723,3 +723,4 @@ tr.below-min td { background: #FDF3F2; }
 .backfill h3 { font-size: 15px; margin: 12px 0 4px; }
 .import-plan { margin-top: 10px; }
 .import-plan ul { margin: 4px 0 8px; padding-left: 18px; }
+.danger-btn { color: #B42318; border-color: #F1C4BF; }
