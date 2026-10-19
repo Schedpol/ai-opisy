@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import HelpDrawer from '../help/HelpDrawer.jsx'
 import JobOverlay from './JobOverlay.jsx'
+import { APP_VERSION } from '../version.js'
 import { jobActivity, activeJobCount } from '../jobs.js'
 import { supabase, ROLE_LABELS } from '../supabase.js'
 
@@ -52,6 +53,7 @@ export default function Layout({ profile }) {
           {loc.pathname !== '/pomoc' && <button className="nav-link help-btn" onClick={() => setHelp(v => !v)} aria-expanded={help}>? Pomoc do tego ekranu</button>}
         </div>
         <div className="sidebar-foot">
+          <span className="app-version" title="Wersja aplikacji">wersja {APP_VERSION}</span>
           <NavLink to="/konto" className="me">
             <span className="me-name">{profile?.full_name || profile?.email || '…'}</span>
             <span className="me-role">{ROLE_LABELS[profile?.role] || ''}</span>
