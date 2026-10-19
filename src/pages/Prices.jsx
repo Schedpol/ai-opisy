@@ -173,7 +173,7 @@ function FileImport({ d, onDone }) {
     <div className="file-import">
       <h3>Z pliku – raport cenowy z panelu Dealavo</h3>
       <p className="muted small">Raport z panelu zawiera ceny dzienne z ok. 29 dni wstecz, więc kwartał to 4 pliki. Wybierz kilka naraz – dni powtarzające się w plikach liczą się raz. Nie zużywa wykonań n8n.</p>
-      <p className="hint small"><strong>Uwaga:</strong> raport ma jedną cenę katalogową na ofertę – z dnia wygenerowania raportu – i porównuje z nią ceny ze wszystkich 29 dni. Jeśli w tym okresie zmienialiście ceny katalogowe (np. promocja), naruszenia będą policzone błędnie. Dla takich okresów użyj pobierania przez API poniżej – liczy każdy dzień od ceny obowiązującej tego dnia.</p>
+      <p className="hint small"><strong>Uwaga:</strong> raport ma jedną cenę katalogową na ofertę – z dnia wygenerowania raportu – i porównuje z nią ceny ze wszystkich 29 dni. Jeśli w tym okresie zmienialiście ceny katalogowe (np. promocja), naruszenia będą policzone błędnie. Dla takich okresów użyj pobierania przez API powyżej – liczy każdy dzień od ceny obowiązującej tego dnia. Raport z panelu <strong>nie zawiera marki</strong>, więc import obejmie wszystkie produkty, a nie tylko analizowaną markę – wygeneruj w panelu raport zawężony do niej.</p>
       <input type="file" accept=".xlsx" multiple onChange={e => pick([...e.target.files])} disabled={st?.running} />
       {err && <p className="error">{err}</p>}
       {plan && !st?.running && (
@@ -243,7 +243,7 @@ function Backfill({ d, onDone }) {
     <>
       <p className="muted small">Pobiera kolejne aktualizacje z Dealavo przez n8n (ok. 1 min na dzień, każda to jedno wykonanie n8n) i zapisuje wskaźniki oraz naruszenia – bieżące oferty nie zmieniają się. Ceny katalogowe są z dnia pomiaru. <strong>Nie zamykaj tej karty</strong> w trakcie.</p>
       <div className="row-actions">
-        <label className="inline-label">Kwartał<select value={q} onChange={e => changeQ(e.target.value)} disabled={st?.running}>{['2026-Q3', '2026-Q2', '2026-Q1'].map(x => <option key={x} value={x}>{x.replace('-', ' ')}</option>)}</select></label>
+        <label className="inline-label">Kwartał<select value={q} onChange={e => changeQ(e.target.value)} disabled={st?.running}>{['2026-Q4', '2026-Q3', '2026-Q2', '2026-Q1'].map(x => <option key={x} value={x}>{x.replace('-', ' ')}</option>)}</select></label>
         <label className="inline-label">Od dnia<input type="date" value={from} min={qStart(q)} onChange={e => setFrom(e.target.value)} disabled={st?.running} /></label>
         <label className="inline-label">Częstotliwość<select value={cadence} onChange={e => setCadence(e.target.value)} disabled={st?.running}><option value="daily">codziennie</option><option value="weekly">co tydzień</option></select></label>
       </div>
@@ -351,7 +351,7 @@ export default function Prices({ profile }) {
       const r = await runJob('dealavo_sync', {}, { url: DATA_URL, timeoutSec: 300 })
       const refName = /suggested/i.test(r?.reference || '') ? 'ceny katalogowej (w API Dealavo: „Suggested price”)' : r?.reference === 'Catalogue Price' ? 'ceny katalogowej' : r?.reference === 'Price' ? 'ceny Waszego sklepu' : null
       const sameMin = r?.min_price_column && r.min_price_column === r.reference
-      setMsg({ type: r?.has_min_price === false ? 'hint' : 'ok', text: `Pobrano aktualizację z ${when(r?.update_time)}: ${r?.rows ?? '?'} dostępnych ofert${r?.pages ? ` (${r.pages} ${r.pages === 1 ? 'strona' : 'strony'})` : ''}, ${r?.tracked ?? '?'} w kanałach śledzonych podmiotów.${refName ? ` Rozbieżność${sameMin ? ' i naruszenia ceny minimalnej' : ''} liczone od ${refName}.` : ''}${r?.has_min_price === false ? ' Uwaga: brak cen minimalnych – naruszeń nie da się policzyć.' : ''}` }); load()
+      setMsg({ type: r?.has_min_price === false ? 'hint' : 'ok', text: `Pobrano aktualizację z ${when(r?.update_time)}: ${r?.brand_filter ? `marka ${r.brand_filter} – ${r.rows} z ${r.rows_all} dostępnych ofert` : `${r?.rows ?? '?'} dostępnych ofert`}, ${r?.tracked ?? '?'} w kanałach śledzonych podmiotów.${refName ? ` Rozbieżność${sameMin ? ' i naruszenia ceny minimalnej' : ''} liczone od ${refName}.` : ''}${r?.has_min_price === false ? ' Uwaga: brak cen minimalnych – naruszeń nie da się policzyć.' : ''}` }); load()
     } catch (e) { setMsg({ type: 'error', text: /^n8n odrzucił zadanie \(kod 404\)/.test(e.message) ? 'n8n nie zna adresu „studio-dane” – workflow „Studio – dane rynkowe” nie jest aktywny.' : plError(e.message) }) } finally { setBusy(false) }
   }
   function exportCsv() {
@@ -371,7 +371,7 @@ export default function Prices({ profile }) {
   return (
     <section className="page wide">
       <h1>Ceny u partnerów</h1>
-      <p className="muted lead">Dane z Dealavo (Polska): ceny dostępnych ofert u partnerów wobec Waszej ceny katalogowej, która jest ceną minimalną. Rozbieżność bez kosztu wysyłki; wartość ujemna = oferta poniżej ceny katalogowej (naruszenie).</p>
+      <p className="muted lead">Dane z Dealavo (Polska): ceny dostępnych ofert produktów marki Schedline u partnerów wobec Waszej ceny katalogowej, która jest ceną minimalną. Rozbieżność bez kosztu wysyłki; wartość ujemna = oferta poniżej ceny katalogowej (naruszenie).</p>
       <div className="panel">
         <div className="prices-head">
           <span>{d.last ? <>Ostatnia aktualizacja Dealavo: <strong>{when(d.last)}</strong></> : <span className="muted">Dane z Dealavo nie były jeszcze pobrane.</span>}</span>
