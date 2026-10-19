@@ -656,3 +656,8 @@ a .dnode.sku:hover rect:first-child { stroke: var(--action); }
 .legend-row .img-chip { padding: 2px 8px; font-size: 12px; }
 @media (max-width: 1100px) { .img-top { grid-template-columns: 1fr; } }
 .app-version { display: block; font-size: 11px; color: #7F8FB3; margin-bottom: 8px; }
+/* Plan i kopie */
+.usage-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 8px 0; }
+.usage-bar { flex: 1; min-width: 200px; height: 12px; border-radius: 6px; }
+.usage-bar.warn > span { background: #D9922E; } .usage-bar.crit > span { background: var(--error, #B42318); }
+.plan-triggers { padding-left: 18px; display: flex; flex-direction: column; gap: 8px; margin: 8px 0 16px; }

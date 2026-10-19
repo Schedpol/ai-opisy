@@ -4,6 +4,7 @@ import { runJob, PUBLISH_URL } from '../jobs.js'
 import { LANGS, BASE_FORBIDDEN, DEFAULT_TITLE_PATTERN, titlePresetFor } from '../languages.js'
 import { copyTemplates, deleteChannel, createBlankTemplates, activeBrands } from '../channels.js'
 import TechMap from '../components/TechMap.jsx'
+import PlanUsage from '../components/PlanUsage.jsx'
 import { OUTPUT_PRESETS } from '../render.js'
 
 const plN = (n, one, few, many) => `${n} ${n === 1 ? one : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? few : many}`
@@ -159,8 +160,10 @@ export default function Settings() {
       <div className="tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'kanaly'} className={tab === 'kanaly' ? 'tab on' : 'tab'} onClick={() => setTab('kanaly')}>Kanały sprzedaży</button>
         <button role="tab" aria-selected={tab === 'technologie'} className={tab === 'technologie' ? 'tab on' : 'tab'} onClick={() => setTab('technologie')}>Mapa technologii</button>
+        <button role="tab" aria-selected={tab === 'plan'} className={tab === 'plan' ? 'tab on' : 'tab'} onClick={() => setTab('plan')}>Plan i kopie</button>
       </div>
       {tab === 'technologie' && <TechMap />}
+      {tab === 'plan' && <PlanUsage />}
       {tab === 'kanaly' && <>
       <div className="panel">
         <div className="panel-head">
