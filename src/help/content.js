@@ -121,7 +121,9 @@ Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne 
 export const SCREEN_HELP = [
   { path: '/ceny', title: 'Ceny u partnerów (Dealavo)', section: 'role', md: `- Ranking partnerów: średnia i mediana rozbieżności ceny (dostępne oferty, bez wysyłki; ujemna = taniej) oraz liczba produktów poniżej ceny minimalnej.
 - **Podmioty i kanały:** kliknij podmiot, żeby zmienić jego nazwę i typ oraz dodać kanały – każdy z Twoją etykietą (np. „Allegro PL”, „Castorama”) i nazwą sprzedawcy w Dealavo. Wskaźniki podmiotu to suma kanałów; w szczegółach widać je też per kanał. Jedna nazwa z Dealavo może należeć tylko do jednego podmiotu.
-- **Pobierz z Dealavo** (admin) – pobiera ostatnią aktualizację i przelicza wskaźniki. Do bazy trafiają wskaźniki z każdej aktualizacji (historia) i oferty z ostatniej.` },
+- **Pobieranie:** automatycznie codziennie o 7:00, a na żądanie przyciskiem **Pobierz z Dealavo** (admin).
+- **Historia kwartalna:** per rok i kwartał – liczba produktów, które choć raz były poniżej ceny katalogowej, albo średnia rozbieżność.
+- **Szczegóły podmiotu:** produkty poniżej ceny katalogowej teraz, historia naruszeń w wybranym kwartale (najniższa cena, kanały, w ilu pobraniach) i wszystkie oferty.` },
   { path: '/analityka', title: 'Analityka', section: 'role', md: `- Raporty Power BI osadzone w Studio. Przy pierwszym otwarciu Power BI poprosi o zalogowanie kontem firmowym Microsoft; potrzebna licencja Power BI Pro.
 - Admin dodaje raport linkiem z Power BI: Plik → Osadź raport → Witryna lub portal. Linki „Publikuj w internecie” są odrzucane, bo byłyby publiczne.` },
   { path: '/drzewo', title: 'Drzewo produktów', section: 'ekrany', md: `- **Lista | Diagram** – diagram pokazuje rozgałęzienie: kategoria › technologia › model › kolor › kształt › rozmiar › odpływ › SKU. Kliknij węzeł, żeby rozwinąć kolejny poziom; „Rozwiń do poziomu” otwiera całe drzewo do wybranej kolumny. Poziomy bez danych (np. odpływ dla nośników) są pomijane.

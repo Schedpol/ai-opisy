@@ -7,6 +7,9 @@ import DrainLoader from '../components/DrainLoader.jsx'
 const KIND = { partner: 'partner', wlasny: 'kanał własny', marketplace: 'marketplace' }
 const pct = v => v === null || v === undefined ? '—' : `${v > 0 ? '+' : ''}${Number(v).toLocaleString('pl-PL', { maximumFractionDigits: 1 })}%`
 const zl = v => v === null || v === undefined ? '—' : `${Number(v).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`
+const quarterOf = t => { const m = String(t || '').match(/^(\d{4})_(\d{2})/); return m ? `${m[1]}-Q${Math.ceil(Number(m[2]) / 3)}` : null }
+const dayOf = t => { const m = String(t || '').match(/^(\d{4})_(\d{2})_(\d{2})/); return m ? `${m[3]}.${m[2]}.${m[1]}` : '—' }
+const nowQuarter = () => { const d = new Date(); return `${d.getFullYear()}-Q${Math.ceil((d.getMonth() + 1) / 3)}` }
 const when = t => { const m = String(t || '').match(/^(\d{4})_(\d{2})_(\d{2})(?:_(\d{2})_(\d{2}))?/); return m ? `${m[3]}.${m[2]}.${m[1]}${m[4] ? ` ${m[4]}:${m[5]}` : ''}` : (t || '—') }
 
 const dupMsg = e => /duplicate key|23505/.test(e.message || '') ? 'Ta nazwa z Dealavo jest już przypisana do innego podmiotu – jedna oferta nie może liczyć się dwa razy.' : plError(e.message)
@@ -69,6 +72,102 @@ function Entity({ partner, channels, retailers, taken, offers, admin, onSaved, s
   )
 }
 
+function BelowNow({ offers, channels }) {
+  const label = r => channels.find(c => c.retailer === r)?.label || r
+  const byProd = new Map()
+  for (const o of (offers || []).filter(o => o.available && o.below_min)) {
+    const g = byProd.get(o.product_id) || { ...o, list: [] }
+    g.list.push(o); if (o.retailer_price < g.retailer_price) Object.assign(g, { retailer_price: o.retailer_price, url: o.url, gap_pct: o.gap_pct })
+    byProd.set(o.product_id, g)
+  }
+  const rows = [...byProd.values()].sort((x, y) => (x.gap_pct ?? 0) - (y.gap_pct ?? 0))
+  if (!offers) return <DrainLoader />
+  if (!rows.length) return <p className="muted">Żaden produkt nie ma teraz ceny poniżej katalogowej.</p>
+  return (
+    <div className="table-wrap"><table className="compact">
+      <thead><tr><th>Produkt</th><th className="num-cell">Cena katalogowa</th><th className="num-cell">Najniższa cena</th><th className="num-cell">Poniżej o</th><th>Kanały (cena)</th></tr></thead>
+      <tbody>{rows.map(g => (
+        <tr key={g.product_id} className="below-min">
+          <td>{g.url ? <a href={g.url} target="_blank" rel="noreferrer">{g.article || g.product_id}</a> : (g.article || g.product_id)}{g.ean && <span className="muted small mono"> {g.ean}</span>}</td>
+          <td className="num-cell">{zl(g.min_price)}</td>
+          <td className="num-cell"><strong className="crit-text">{zl(g.retailer_price)}</strong></td>
+          <td className="num-cell neg">{pct(g.gap_pct)}</td>
+          <td className="small">{g.list.sort((x, y) => x.retailer_price - y.retailer_price).map(o => <span key={o.id} className="ch-price">{label(o.retailer)}: {zl(o.retailer_price)}</span>)}</td>
+        </tr>
+      ))}</tbody>
+    </table></div>
+  )
+}
+
+function BelowHistory({ partner, channels, quarters, stats }) {
+  const [q, setQ] = useState(quarters[0] || nowQuarter())
+  const [rows, setRows] = useState(null)
+  useEffect(() => { setRows(null); fetchAll('dealavo_violations', '*', x => x.eq('partner_id', partner.id).eq('quarter', q)).then(r => setRows(r.sort((a, b) => b.max_below_pct - a.max_below_pct))).catch(() => setRows([])) }, [partner.id, q])
+  const label = r => channels.find(c => c.retailer === r)?.label || r
+  const st = stats.filter(x => x.partner_id === partner.id && quarterOf(x.update_time) === q && x.offers > 0)
+  const avg = st.length ? st.reduce((m, x) => m + Number(x.avg_gap_pct || 0), 0) / st.length : null
+  return (
+    <>
+      <div className="row-actions">
+        <label className="inline-label">Kwartał<select className="quarter-select" value={q} onChange={e => setQ(e.target.value)}>{[...new Set([nowQuarter(), ...quarters])].sort().reverse().map(x => <option key={x} value={x}>{x.replace('-', ' ')}</option>)}</select></label>
+        <span className="muted small">{st.length ? `${st.length} ${st.length === 1 ? 'pobranie' : (st.length % 10 >= 2 && st.length % 10 <= 4 && (st.length % 100 < 10 || st.length % 100 >= 20)) ? 'pobrania' : 'pobrań'} w kwartale · średnia rozbieżność ${pct(Math.round(avg * 100) / 100)}` : 'brak pobrań w tym kwartale'}</span>
+      </div>
+      {rows === null ? <DrainLoader /> : rows.length === 0 ? <p className="muted">W tym kwartale żaden produkt nie był poniżej ceny katalogowej.</p> : (
+        <div className="table-wrap"><table className="compact">
+          <thead><tr><th>Produkt</th><th className="num-cell">Cena katalogowa</th><th className="num-cell">Najniższa cena</th><th className="num-cell">Maks. poniżej</th><th>Kanały</th><th className="num-cell">W ilu pobraniach</th><th>Pierwszy / ostatni raz</th></tr></thead>
+          <tbody>{rows.map(v => (
+            <tr key={v.product_id}>
+              <td>{v.url ? <a href={v.url} target="_blank" rel="noreferrer">{v.article || v.product_id}</a> : (v.article || v.product_id)}{v.ean && <span className="muted small mono"> {v.ean}</span>}</td>
+              <td className="num-cell">{zl(v.catalogue_price)}</td>
+              <td className="num-cell crit-text">{zl(v.min_retailer_price)}</td>
+              <td className="num-cell neg">−{Number(v.max_below_pct).toLocaleString('pl-PL', { maximumFractionDigits: 1 })}%</td>
+              <td className="small">{(v.channels || []).map(label).join(', ')}</td>
+              <td className="num-cell">{v.seen_updates}{st.length ? <span className="muted"> / {st.length}</span> : null}</td>
+              <td className="small">{dayOf(v.first_seen)} – {dayOf(v.last_seen)}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      )}
+    </>
+  )
+}
+
+function QuarterHistory({ d, onPick }) {
+  const years = [...new Set([...(d.allStats || []).map(x => quarterOf(x.update_time)), ...(d.vcount || []).map(x => x.quarter)].filter(Boolean).map(q => q.slice(0, 4)))].sort().reverse()
+  const [year, setYear] = useState(years[0] || String(new Date().getFullYear()))
+  const [metric, setMetric] = useState('naruszenia')
+  if (!years.length) return <p className="muted">Historia pojawi się po pierwszych pobraniach – od teraz codziennie o 7:00.</p>
+  const Q = [1, 2, 3, 4].map(n => `${year}-Q${n}`)
+  const viol = {}; for (const v of d.vcount || []) viol[`${v.partner_id}|${v.quarter}`] = (viol[`${v.partner_id}|${v.quarter}`] || 0) + 1
+  const gap = {}, runs = {}
+  for (const x of d.allStats || []) { if (!(x.offers > 0)) continue; const k = `${x.partner_id}|${quarterOf(x.update_time)}`; (gap[k] = gap[k] || []).push(Number(x.avg_gap_pct || 0)) }
+  for (const x of d.allStats || []) { const k = quarterOf(x.update_time); runs[k] = runs[k] || new Set(); runs[k].add(x.update_time) }
+  const first = (d.allStats || []).reduce((m, x) => !m || x.update_time < m ? x.update_time : m, '')
+  const list = d.partners.filter(p => p.active && Q.some(q => viol[`${p.id}|${q}`] || gap[`${p.id}|${q}`]))
+    .sort((a, b) => Q.reduce((s, q) => s + (viol[`${b.id}|${q}`] || 0), 0) - Q.reduce((s, q) => s + (viol[`${a.id}|${q}`] || 0), 0) || a.name.localeCompare(b.name, 'pl'))
+  const cell = (p, q) => {
+    if (metric === 'naruszenia') { const n = viol[`${p.id}|${q}`]; return gap[`${p.id}|${q}`] || n ? (n ? <strong className="crit-text">{n}</strong> : 0) : '—' }
+    const g = gap[`${p.id}|${q}`]; return g ? pct(Math.round(g.reduce((s, x) => s + x, 0) / g.length * 100) / 100) : '—'
+  }
+  return (
+    <>
+      <div className="row-actions">
+        <label className="inline-label">Rok<select value={year} onChange={e => setYear(e.target.value)}>{years.map(y => <option key={y}>{y}</option>)}</select></label>
+        <div className="seg" role="radiogroup">
+          <button className={metric === 'naruszenia' ? 'on' : ''} onClick={() => setMetric('naruszenia')}>Produkty poniżej ceny katalogowej</button>
+          <button className={metric === 'rozbieznosc' ? 'on' : ''} onClick={() => setMetric('rozbieznosc')}>Średnia rozbieżność</button>
+        </div>
+      </div>
+      <p className="muted small">{metric === 'naruszenia' ? 'Liczba różnych produktów, które w kwartale choć raz były poniżej ceny katalogowej.' : 'Średnia z rozbieżności zmierzonych w pobraniach w danym kwartale.'} Dane od {dayOf(first)}.</p>
+      <div className="table-wrap"><table className="compact prices-table">
+        <thead><tr><th>Podmiot</th>{Q.map(q => <th key={q} className="num-cell">{q.slice(5)}<span className="muted small"> · {runs[q]?.size || 0} pobr.</span></th>)}</tr></thead>
+        <tbody>{list.map(p => <tr key={p.id} onClick={() => onPick(p.id)}><td>{p.name}{p.kind !== 'partner' && <span className="tag">{KIND[p.kind]}</span>}</td>{Q.map(q => <td key={q} className="num-cell">{cell(p, q)}</td>)}</tr>)}</tbody>
+      </table></div>
+      {list.length === 0 && <p className="muted">Brak danych w {year} r.</p>}
+    </>
+  )
+}
+
 export default function Prices({ profile }) {
   const admin = profile?.role === 'admin'
   const [d, setD] = useState(null)
@@ -78,6 +177,7 @@ export default function Prices({ profile }) {
   const [sel, setSel] = useState('')
   const [offers, setOffers] = useState(null)
   const [onlyBelow, setOnlyBelow] = useState(false)
+  const [tab, setTab] = useState('ponizej')
   const [np, setNp] = useState('')
 
   async function load() {
@@ -89,11 +189,13 @@ export default function Prices({ profile }) {
         fetchAll('dealavo_channels', '*').catch(e => { throw new Error(/dealavo_channels/.test(e.message) ? 'Brak tabeli kanałów – uruchom migrację 32_dealavo_kanaly.sql.' : e.message) }),
       ])
       if (p.error) throw p.error
+      const vi = await fetchAll('dealavo_violations', 'partner_id, quarter').catch(() => null)
       const last = st.reduce((m, s) => s.update_time > m ? s.update_time : m, '')
-      setD({ channels: ch, partners: p.data, stats: Object.fromEntries(st.filter(s => s.update_time === last).map(s => [s.partner_id, s])), last, retailers: rt.sort((a, b) => b.offers - a.offers) })
+      setD({ allStats: st, vcount: vi, channels: ch, partners: p.data, stats: Object.fromEntries(st.filter(s => s.update_time === last).map(s => [s.partner_id, s])), last, retailers: rt.sort((a, b) => b.offers - a.offers) })
     } catch (e) { setErr(/migrację 32/.test(e.message) ? e.message : /dealavo_/.test(e.message) ? 'Brak tabel Dealavo – uruchom migrację 31_dealavo.sql.' : plError(e.message)) }
   }
   useEffect(() => { load() }, [])
+  useEffect(() => { if (sel) setTimeout(() => document.getElementById('partner-details')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }, [sel])
   useEffect(() => {
     if (!sel) { setOffers(null); return }
     fetchAll('dealavo_offers', '*', q => q.eq('partner_id', sel)).then(setOffers).catch(e => setErr(plError(e.message)))
@@ -166,12 +268,24 @@ export default function Prices({ profile }) {
         {admin && <div className="row-actions"><input value={np} onChange={e => setNp(e.target.value)} placeholder="Nowy podmiot do śledzenia…" /><button className="btn ghost small-btn" disabled={!np.trim()} onClick={addPartner}>Dodaj podmiot</button></div>}
       </div>
 
+      <div className="panel">
+        <h2>Historia kwartalna</h2>
+        <QuarterHistory d={d} onPick={id => { setSel(id); setTab('historia') }} />
+      </div>
+
       {cur && (
-        <div className="panel">
+        <div className="panel" id="partner-details">
           <div className="prices-head"><h2>{cur.name}</h2><button className="link-dark" onClick={() => setSel('')}>zamknij</button></div>
           {cur.note && <p className="muted small">{cur.note}</p>}
           <Entity partner={cur} channels={d.channels} retailers={d.retailers} taken={taken} offers={offers} admin={admin} onSaved={load} setMsg={setMsg} />
-          <h3>Oferty z ostatniej aktualizacji</h3>
+          <div className="tabs" role="tablist">
+            <button role="tab" aria-selected={tab === 'ponizej'} className={tab === 'ponizej' ? 'tab on' : 'tab'} onClick={() => setTab('ponizej')}>Poniżej ceny katalogowej – teraz</button>
+            <button role="tab" aria-selected={tab === 'historia'} className={tab === 'historia' ? 'tab on' : 'tab'} onClick={() => setTab('historia')}>Historia naruszeń</button>
+            <button role="tab" aria-selected={tab === 'oferty'} className={tab === 'oferty' ? 'tab on' : 'tab'} onClick={() => setTab('oferty')}>Wszystkie oferty</button>
+          </div>
+          {tab === 'ponizej' && <BelowNow offers={offers} channels={d.channels} />}
+          {tab === 'historia' && <BelowHistory key={cur.id} partner={cur} channels={d.channels} stats={d.allStats || []} quarters={[...new Set((d.vcount || []).filter(v => v.partner_id === cur.id).map(v => v.quarter))].sort().reverse()} />}
+          {tab === 'oferty' && <>
           {offers === null ? <DrainLoader /> : offers.length === 0 ? <p className="muted">Brak ofert {chOf(cur.id).length ? 'w ostatniej aktualizacji' : '– najpierw dodaj kanały'}.</p> : <>
             <label className="check small"><input type="checkbox" checked={onlyBelow} onChange={e => setOnlyBelow(e.target.checked)} /> tylko poniżej ceny minimalnej</label>
             <div className="table-wrap"><table className="compact">
@@ -188,6 +302,7 @@ export default function Prices({ profile }) {
                 </tr>
               ))}</tbody>
             </table></div>
+          </>}
           </>}
         </div>
       )}
