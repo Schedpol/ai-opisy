@@ -3,6 +3,7 @@ import { supabase, plError } from '../supabase.js'
 import { runJob, PUBLISH_URL } from '../jobs.js'
 import { LANGS, BASE_FORBIDDEN, DEFAULT_TITLE_PATTERN, titlePresetFor } from '../languages.js'
 import { copyTemplates, deleteChannel, createBlankTemplates, activeBrands } from '../channels.js'
+import TechMap from '../components/TechMap.jsx'
 import { OUTPUT_PRESETS } from '../render.js'
 
 const plN = (n, one, few, many) => `${n} ${n === 1 ? one : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? few : many}`
@@ -108,6 +109,7 @@ function AddChannel({ channels, onAdded }) {
 
 
 export default function Settings() {
+  const [tab, setTab] = useState(() => (new URLSearchParams(window.location.hash.split('?')[1] || '').get('tab')) || 'kanaly')
   const [channels, setChannels] = useState([])
   const [edit, setEdit] = useState({})
   const [integ, setInteg] = useState(null)
@@ -154,6 +156,12 @@ export default function Settings() {
   return (
     <section className="page">
       <h1>Ustawienia</h1>
+      <div className="tabs" role="tablist">
+        <button role="tab" aria-selected={tab === 'kanaly'} className={tab === 'kanaly' ? 'tab on' : 'tab'} onClick={() => setTab('kanaly')}>Kanały sprzedaży</button>
+        <button role="tab" aria-selected={tab === 'technologie'} className={tab === 'technologie' ? 'tab on' : 'tab'} onClick={() => setTab('technologie')}>Mapa technologii</button>
+      </div>
+      {tab === 'technologie' && <TechMap />}
+      {tab === 'kanaly' && <>
       <div className="panel">
         <div className="panel-head">
           <h2>Kanały sprzedaży</h2>
@@ -205,6 +213,7 @@ export default function Settings() {
         {msg && <p className={msg.type} role="status">{msg.text}</p>}
       </div>
       <AddChannel channels={channels} onAdded={load} />
+      </>}
     </section>
   )
 }

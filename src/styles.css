@@ -612,3 +612,19 @@ a .dnode.sku:hover rect:first-child { stroke: var(--action); }
 .orphans ul { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-direction: column; gap: 10px; }
 .orphan .row-actions { margin: 6px 0 0; }
 .tech-panel summary .tag { margin-left: 8px; }
+
+/* Ustawienia → Mapa technologii */
+.techmap-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.techmap-head h2 { margin: 0; }
+.techmap-techs input, .techmap-techs select { width: 100%; font-size: 13.5px; padding: 6px 8px; }
+.num-cell { text-align: right; font-variant-numeric: tabular-nums; }
+.techmap-grid th { font-size: 12.5px; white-space: normal; min-width: 120px; vertical-align: bottom; }
+.techmap-grid td select { font-size: 12.5px; padding: 4px 6px; width: 100%; }
+.techmap-grid td.on { background: #EAF5EF; }
+.techmap-grid td.inh { background: #F4F7FB; }
+.techmap-grid tr.sub-cat td:first-child { padding-left: 22px; color: var(--ink-soft); }
+.inh-note { display: block; font-size: 11.5px; color: var(--ink-soft); margin-top: 3px; }
+.plan { margin-top: 12px; padding: 12px 14px; border-radius: 8px; background: #F4F7FB; }
+.plan ul { margin: 8px 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.ch-plus { color: var(--ok); } .ch-minus { color: var(--error, #B42318); }
+.add-row td { background: #FBFCFE; }

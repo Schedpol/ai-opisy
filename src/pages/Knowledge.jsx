@@ -16,7 +16,10 @@ function ScopePicker({ v, set, ctx }) {
   // technologie występujące w wybranej kategorii (z przypisań rodzin i reguł słownika); bez kategorii – wszystkie marki
   const techsAll = ctx.techs.filter(t => !t.brand_id || t.brand_id === v.brand_id)
   const inCat = new Set(ctx.families.filter(f => f.brand_id === v.brand_id && categoryMatch(f.category, v.category)).flatMap(f => (f.technologies || []).map(t => t.toLowerCase())))
-  const techs = v.category ? techsAll.filter(t => inCat.has(t.name.toLowerCase()) || (t.match_category && categoryMatch(t.match_category, v.category))) : techsAll
+  const mapped = ctx.techMap.filter(m => m.brand_id === v.brand_id && (categoryMatch(v.category, m.category) || categoryMatch(m.category, v.category))).map(m => m.technology_id)
+  const mappedIds = new Set([...mapped, ...techsAll.filter(t => mapped.includes(t.id)).map(t => t.parent_id).filter(Boolean)])
+  const techs = !v.category ? techsAll : ctx.techMap.some(m => m.brand_id === v.brand_id) ? techsAll.filter(t => mappedIds.has(t.id))
+    : techsAll.filter(t => inCat.has(t.name.toLowerCase()) || (t.match_category && categoryMatch(t.match_category, v.category)))
   const prods = ctx.products.filter(p => p.family_id === v.family_id).sort((a, b) => a.sku.localeCompare(b.sku))
   const colors = [...new Set(prods.map(p => p.attributes?.wykonczenie).filter(Boolean))].sort()
   const brandName = ctx.brands.find(b => b.id === v.brand_id)?.name
@@ -297,17 +300,8 @@ function Technologies({ data, admin, onChanged }) {
         <p className="muted small">Te nazwy są użyte w faktach lub przypisaniach rodzin, ale nie ma ich w słowniku technologii – najczęściej pochodzą z dokumentów wgranych do Księgi wiedzy. Przenieś je do właściwej technologii albo dodaj do słownika.</p>
         <ul>{orphanNames.map(n => <Orphan key={n} name={n} />)}</ul>
       </div>}
-      <p className="muted small">Rodziny dostają technologie automatycznie przy imporcie – według kategorii z PIM (np. brodziki kompozytowe) albo serii (np. Standard Plus). Ręcznie dopisane technologie (ekran Produkty) zostają.</p>
-      {admin && <>
-        <div className="row-actions"><button className="btn ghost small-btn" onClick={assign}>Przypisz rodzinom</button></div>
-        <div className="form-grid tech-form">
-          <label>Nowa technologia<input value={f.name} onChange={e => setF({ ...f, name: e.target.value })} placeholder="np. Stabildense – technologia kompozytowa" /></label>
-          <label>Nadrzędna<select value={f.parent_id} onChange={e => setF({ ...f, parent_id: e.target.value })}><option value="">— brak —</option>{data.techs.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
-          <label>Kategoria PIM (początek)<input value={f.match_category} onChange={e => setF({ ...f, match_category: e.target.value })} placeholder="np. brodziki kompozytowe" /></label>
-          <label>albo seria / technologia z PIM<input value={f.match_series} onChange={e => setF({ ...f, match_series: e.target.value })} placeholder="np. stabildense" /></label>
-          <button className="btn" disabled={!f.name.trim()} onClick={add}>Dodaj</button>
-        </div>
-      </>}
+      <p className="muted small">Rodziny dostają technologie według mapy kategoria × technologia (Ustawienia → Mapa technologii) – przy imporcie automatycznie. Ręcznie dopisane technologie spoza słownika zostają.</p>
+      {admin && <p className="small"><a href="#/ustawienia?tab=technologie">Zarządzaj technologiami i mapą kategoria × technologia → Ustawienia</a></p>}
       {msg && <p className={msg.type}>{msg.text}</p>}
     </details>
   )
@@ -320,7 +314,7 @@ export default function Knowledge({ profile }) {
   const canApprove = ['akceptujacy', 'admin'].includes(profile?.role)
 
   async function load() {
-    const [f, b, fam, d, tq, pr, as] = await Promise.all([
+    const [f, b, fam, d, tq, pr, as, mq] = await Promise.all([
       supabase.from('kb_facts').select('*').order('created_at'),
       supabase.from('brands').select('id, name'),
       supabase.from('product_families').select('id, brand_id, model_name, series, category, technologies').order('model_name'),
@@ -328,10 +322,11 @@ export default function Knowledge({ profile }) {
       supabase.from('kb_technologies').select('*').order('sort'),
       fetchAll('products', 'id, sku, family_id, attributes').catch(() => []),
       fetchAll('assortment', 'brand, category_path').catch(() => []),
+      supabase.from('kb_category_tech').select('*'),
     ])
     const err = [f, b, fam, d].find(x => x.error)?.error
     if (err) { setError(plError(err.message)); return }
-    setData({ facts: f.data, brands: b.data, families: fam.data, docs: d.data, techs: tq.error ? [] : (tq.data || []), products: pr || [], paths: as || [] })
+    setData({ facts: f.data, brands: b.data, families: fam.data, docs: d.data, techs: tq.error ? [] : (tq.data || []), products: pr || [], paths: as || [], techMap: mq.error ? [] : (mq.data || []) })
   }
   useEffect(() => { load() }, [])
 
@@ -350,7 +345,7 @@ export default function Knowledge({ profile }) {
     }
     if (!cm.size) data.families.forEach(f => f.category && !cm.has(f.category) && cm.set(f.category, { key: f.category, label: f.category.replace(/^\p{L}/u, m => m.toUpperCase()), brand: null, sub: false }))
     const categories = [...cm.values()].sort((a, b) => a.key.localeCompare(b.key, 'pl'))
-    return { categories, brands: data.brands, brandsWithProducts: withP.length ? withP : data.brands, families: data.families, techs: data.techs, products: data.products,
+    return { categories, techMap: data.techMap, brands: data.brands, brandsWithProducts: withP.length ? withP : data.brands, families: data.families, techs: data.techs, products: data.products,
       technologies: data.techs.length ? uniq(data.techs.map(t => t.name)) : uniq([...data.facts.map(f => f.technology), ...data.families.flatMap(f => f.technologies || [])]),
       series: uniq([...data.facts.map(f => f.series), ...data.families.map(f => f.series)]) }
   }, [data])

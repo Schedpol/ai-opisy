@@ -35,7 +35,7 @@ Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne 
 | [Publikacja](/publikacja) | wysyłka zaakceptowanych opisów do Baselinkera | admin |
 | [Parametry Base](/parametry) | wyliczanie parametrów z PIM, tłumaczenia na 13 języków, porównanie i zapis w Base | porównuje akceptujący, zapisuje admin |
 | [Reguły QA](/reguly) | zakazane sformułowania, marki konkurencji, zasady redakcyjne dla AI; propozycje z uwag weryfikujących | proponuje każdy, zatwierdza admin |
-| Użytkownicy, Ustawienia | konta i role; kanały sprzedaży (dodawanie, ID integracji w Baselinkerze, wzorzec i limit tytułu) | admin |` },
+| Użytkownicy, Ustawienia | konta i role; **Kanały sprzedaży** (dodawanie, ID integracji w Baselinkerze, wzorzec i limit tytułu); **Mapa technologii** (technologie marki i przypisanie technologii do kategorii – decyduje, które fakty technologii trafią do których serii) | admin |` },
 
   { id: 'zadania', title: 'Typowe zadania krok po kroku', md: `### Opis nowego modelu na istniejącym rynku
 
@@ -157,7 +157,8 @@ export const SCREEN_HELP = [
   { path: '/reguly', title: 'Reguły QA', section: 'jakosc', md: `- Zakazane sformułowania i marki konkurencji blokują akceptację opisu.
 - Zasady redakcyjne trafiają do promptu AI.
 - Filtr języka pokazuje reguły danego języka razem z regułami dla wszystkich języków.` },
-  { path: '/ustawienia', title: 'Ustawienia', section: 'nowy-rynek-lub-kanal-sprzedazy-admin', md: `- **Dodaj kanał** – rynek, ID integracji, szablony (od zera lub kopia), format HTML, banki fraz, reguły QA.
+  { path: '/ustawienia', title: 'Ustawienia', section: 'nowy-rynek-lub-kanal-sprzedazy-admin', md: `- **Mapa technologii:** słownik technologii marki (dodawanie, zmiana nazwy – przenosi się na fakty i rodziny, usuwanie) oraz tabela kategoria × technologia. Tryb „wg PIM” – technologię dostają serie, które mają ją w PIM; „wszystkie serie” – każda seria kategorii. Po zmianach: **Zastosuj do rodzin…** z podglądem zmian.
+- **Dodaj kanał** – rynek, ID integracji, szablony (od zera lub kopia), format HTML, banki fraz, reguły QA.
 - Pod każdym kanałem: wzorzec tytułu; obok limit znaków tytułu.
 - Kanału z opisami nie da się usunąć – wyłącz go („Aktywny”).` },
   { path: '/uzytkownicy', title: 'Użytkownicy', section: 'role', md: `- Nadawanie ról: generujący, akceptujący, admin. Role dziedziczą uprawnienia w górę.` },

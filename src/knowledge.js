@@ -49,31 +49,54 @@ export function scopeLabel(fact, brands, families, products = [], categories = [
   return `${LEVEL_LABEL[fact.level] || fact.level}: ${what || '—'}${brand && fact.level !== 'marka' ? ` · ${brand}` : ''}`
 }
 
-// Technologie (kb_technologies): podtechnologia + nadrzędna. Rodzina z „Stabildense – technologia kompozytowa”
-// dostaje też „Stabildense”, więc fakty o technologii nadrzędnej trafiają do wszystkich jej odmian.
-export function techFor(family, techs) {
-  const cat = String(family.category || '').toLowerCase(), ser = String(family.series || '').toLowerCase()
+// Technologie rodziny wg mapy kategoria × technologia (Ustawienia → Mapa technologii).
+// „wg_pim”: tylko gdy seria/technologia z PIM zawiera klucz technologii (match_series); „wszystkie”: każda seria w kategorii.
+// Do technologii zawsze dochodzi jej nadrzędna (fakty o Stabildense trafiają też do jej odmian).
+// Marka bez mapy – dotychczasowe reguły z kb_technologies (match_category / match_series).
+export function techFor(family, techs, map = null) {
   const out = new Set()
+  const addWithParent = t => { out.add(t.name); const p = techs.find(x => x.id === t.parent_id); if (p) out.add(p.name) }
+  const brandMap = (map || []).filter(m => m.brand_id === family.brand_id)
+  const ser = String(family.series || '').toLowerCase()
+  if (brandMap.length) {
+    for (const m of brandMap) {
+      if (!categoryMatch(family.category, m.category)) continue
+      const t = techs.find(x => x.id === m.technology_id); if (!t) continue
+      if (m.mode === 'wszystkie' || !t.match_series || ser.includes(t.match_series.toLowerCase())) addWithParent(t)
+    }
+    return [...out].sort()
+  }
+  const cat = String(family.category || '').toLowerCase()
   for (const t of techs.filter(t => !t.brand_id || t.brand_id === family.brand_id)) {
     const hit = (t.match_category && cat.startsWith(t.match_category.toLowerCase())) || (t.match_series && ser.includes(t.match_series.toLowerCase()))
-    if (!hit) continue
-    out.add(t.name)
-    const parent = techs.find(x => x.id === t.parent_id)
-    if (parent) out.add(parent.name)
+    if (hit) addWithParent(t)
   }
-  return [...out]
+  return [...out].sort()
 }
 
-// Uzupełnia technologie rodzin według reguł (nigdy nie usuwa przypisanych ręcznie)
+// Plan zmian: dla każdej rodziny technologie ze słownika wg mapy; technologie spoza słownika (dopisane ręcznie) zostają
+export function techPlan(families, techs, map) {
+  const dict = new Set(techs.map(t => t.name.toLowerCase()))
+  return families.map(f => {
+    const cur = f.technologies || []
+    const want = techFor(f, techs, map)
+    const keep = cur.filter(t => !dict.has(t.toLowerCase()))
+    const next = [...new Set([...keep, ...want])].sort()
+    return { family: f, cur, next, add: next.filter(t => !cur.includes(t)), remove: cur.filter(t => !next.includes(t)) }
+  }).filter(x => x.add.length || x.remove.length)
+}
+
+// Import: tylko dopisuje brakujące technologie (nie usuwa)
 export async function autoAssignTechnologies(supabase, familyIds = null) {
-  const [{ data: techs }, fq] = await Promise.all([
+  const [{ data: techs }, mq, fq] = await Promise.all([
     supabase.from('kb_technologies').select('*'),
+    supabase.from('kb_category_tech').select('*'),
     (familyIds ? supabase.from('product_families').select('id, brand_id, category, series, technologies').in('id', familyIds) : supabase.from('product_families').select('id, brand_id, category, series, technologies')),
   ])
   if (!techs?.length) return 0
   let changed = 0
   for (const f of fq.data || []) {
-    const add = techFor(f, techs).filter(t => !(f.technologies || []).includes(t))
+    const add = techFor(f, techs, mq.error ? null : mq.data).filter(t => !(f.technologies || []).includes(t))
     if (!add.length) continue
     const { error } = await supabase.from('product_families').update({ technologies: [...(f.technologies || []), ...add].sort() }).eq('id', f.id)
     if (!error) changed++
