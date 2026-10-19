@@ -27,14 +27,16 @@ export async function buildContext(familyId, channelId) {
   if (!product) problems.push('Wybierz wariant wiodący rodziny (ekran Produkty).')
   if (!template) problems.push(`Brak aktywnego szablonu dla ${br.data?.name} · ${MARKET(channel)}.`)
   const { data: brandFams } = await supabase.from('product_families').select('id, brand_id, model_name').eq('brand_id', family.brand_id)
-  const famFacts = (facts.data || []).filter(f => applies(f, family, brandFams || []) || (f.level === 'wariant' && f.family_id === family.id))
+  // opis bazowy: fakty ogólne + koloru i SKU wariantu wiodącego
+  const famFacts = (facts.data || []).filter(f => applies(f, family, brandFams || [], product))
+  const factPool = facts.data || []
   if (!famFacts.length) problems.push('Brak zatwierdzonych faktów dla tej rodziny (Księga wiedzy).')
   const eq = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
   const bank = (banks.data || []).find(b => eq(b.category, family.category) && b.language === channel.language)
   const excluded = new Set(bank?.excluded || [])
   const keywords = (bank?.keywords || []).filter(k => !excluded.has(k.kw)).map(k => ({ kw: k.kw, volume: k.volume }))
   if (!keywords.length) problems.push(`Bank fraz „${family.category} · ${channel.language.toUpperCase()}” jest pusty – odśwież go (Frazy kluczowe).`)
-  return { problems, family, channel, brand: br.data, template, product, facts: famFacts, keywords, library: lib.data || [],
+  return { problems, family, channel, brand: br.data, template, product, facts: famFacts, factPool, brandFams: brandFams || [], keywords, library: lib.data || [],
     forbidden: (rules.data || []).filter(r => ['zakazany_wzorzec', 'marka_konkurencji'].includes(r.rule_type) && (!r.language || r.language === channel.language)).map(r => r.pattern),
     // wytyczne wyuczone z uwag (ogólne + języka rynku), potem reguły redakcyjne dodane ręcznie
     instructions: [
@@ -142,6 +144,7 @@ export async function generateVariants(base, { onlyMissing = true } = {}) {
   }
   const byId = Object.fromEntries(todo.map(p => [p.id, p]))
   const variants = created.map(c => { const p = byId[c.product_id]; return { description_id: c.id, sku: p.sku, attributes: p.attributes,
+    facts: ctx.factPool.filter(f => ['model', 'wariant'].includes(f.level) && applies(f, ctx.family, ctx.brandFams, p)).map(f => f.content),
     images: resolveImages(ctx.template, { brand_id: ctx.family.brand_id, family: ctx.family, product: p, library: ctx.library }) } })
   for (let i = 0; i < variants.length; i += 6) {
     const chunk = variants.slice(i, i + 6)

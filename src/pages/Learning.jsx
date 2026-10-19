@@ -105,7 +105,7 @@ export default function Learning({ profile }) {
       // fakty z uwag → propozycje w Księdze wiedzy (do akceptacji)
       const facts = (x.items || []).filter(i => i.kind === 'fakt' && i.fact).map(i => {
         const c = list.find(z => z.id === i.id), fam = c?.descriptions?.product_families
-        return { content: i.fact, level: 'model', brand_id: fam?.brand_id || null, family_id: c?.descriptions?.family_id || null, status: 'do_akceptacji',
+        return { content: i.fact, level: 'seria', brand_id: fam?.brand_id || null, family_id: c?.descriptions?.family_id || null, status: 'do_akceptacji',
           source_note: `Z uwagi w weryfikacji (${date(c?.created_at)}): „${String(c?.content || '').slice(0, 200)}”` }
       }).filter(f => f.family_id)
       if (facts.length) { const e = await supabase.from('kb_facts').insert(facts); if (e.error) throw e.error }

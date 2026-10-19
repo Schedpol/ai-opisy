@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import mammoth from 'mammoth/mammoth.browser.js'
-import { supabase, plError } from '../supabase.js'
-import { applies, scopeLabel, LEVEL_LABEL } from '../knowledge.js'
+import { supabase, plError, fetchAll } from '../supabase.js'
+import { applies, touchesFamily, scopeLabel, LEVEL_LABEL, LEVEL_HINT } from '../knowledge.js'
 import { runJob } from '../jobs.js'
 import DrainLoader from '../components/DrainLoader.jsx'
 import { autoAssignTechnologies } from '../knowledge.js'
@@ -10,14 +10,56 @@ const plural = (n, one, few, many) => n === 1 ? one : (n % 10 >= 2 && n % 10 <= 
 
 const TABS = [['do_akceptacji', 'Do akceptacji'], ['zatwierdzony', 'Zatwierdzone'], ['odrzucony', 'Odrzucone'], ['dokumenty', 'Dokumenty']]
 
+// Zakres faktu: poziom → marka → technologia / seria → kolor / SKU (listy zależne od wcześniejszego wyboru)
+function ScopePicker({ v, set, ctx }) {
+  const fams = ctx.families.filter(f => f.brand_id === v.brand_id)
+  const techs = ctx.techs.filter(t => !t.brand_id || t.brand_id === v.brand_id)
+  const prods = ctx.products.filter(p => p.family_id === v.family_id).sort((a, b) => a.sku.localeCompare(b.sku))
+  const colors = [...new Set(prods.map(p => p.attributes?.wykonczenie).filter(Boolean))].sort()
+  const up = patch => set({ ...v, ...patch })
+  return (
+    <div className="grid-form scope-picker">
+      <label>Poziom<select value={v.level} onChange={e => up({ level: e.target.value })}>
+        {Object.entries(LEVEL_LABEL).map(([k, l]) => <option key={k} value={k}>{l} – {LEVEL_HINT[k]}</option>)}</select></label>
+      <label>Marka<select value={v.brand_id || ''} onChange={e => up({ brand_id: e.target.value, technology: '', family_id: '', color: '', product_id: '' })}>
+        {ctx.brandsWithProducts.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+      {v.level === 'technologia' && <label>Technologia<select value={v.technology || ''} onChange={e => up({ technology: e.target.value })}>
+        <option value="">— wybierz —</option>{techs.map(t => <option key={t.id} value={t.name}>{t.parent_id ? '\u00a0\u00a0› ' : ''}{t.name}</option>)}
+        {v.technology && !techs.some(t => t.name === v.technology) && <option value={v.technology}>{v.technology} (spoza słownika)</option>}</select></label>}
+      {['seria', 'model', 'wariant'].includes(v.level) && <label>Seria<select value={v.family_id || ''} onChange={e => up({ family_id: e.target.value, color: '', product_id: '' })}>
+        <option value="">— wybierz —</option>{fams.map(f => <option key={f.id} value={f.id}>{f.model_name}</option>)}</select></label>}
+      {v.level === 'model' && <label>Kolor<select value={v.color || ''} onChange={e => up({ color: e.target.value })} disabled={!v.family_id}>
+        <option value="">— wybierz —</option>{colors.map(c => <option key={c} value={c}>{c}</option>)}
+        {v.color && !colors.includes(v.color) && <option value={v.color}>{v.color} (brak takich SKU)</option>}</select></label>}
+      {v.level === 'wariant' && <label>SKU<select value={v.product_id || ''} onChange={e => up({ product_id: e.target.value })} disabled={!v.family_id}>
+        <option value="">— wybierz —</option>{prods.map(p => <option key={p.id} value={p.id}>{p.sku}{p.attributes?.wykonczenie ? ` · ${p.attributes.wykonczenie}` : ''}</option>)}</select></label>}
+    </div>
+  )
+}
+const scopeComplete = v => v.level === 'marka' ? !!v.brand_id : v.level === 'technologia' ? !!v.technology : v.level === 'seria' ? !!v.family_id : v.level === 'model' ? !!(v.family_id && v.color) : !!(v.family_id && v.product_id)
+const scopeRow = v => ({ level: v.level, brand_id: v.brand_id || null, technology: v.level === 'technologia' ? v.technology || null : null, series: null,
+  family_id: ['seria', 'model', 'wariant'].includes(v.level) ? v.family_id || null : null, color: v.level === 'model' ? v.color || null : null, product_id: v.level === 'wariant' ? v.product_id || null : null })
+const scopeOf = f => ({ level: f.level, brand_id: f.brand_id || '', technology: f.technology || '', family_id: f.family_id || '', color: f.color || '', product_id: f.product_id || '' })
+
+// Komu fakt trafi do opisów (czytelny podgląd zakresu)
+function reach(fact, ctx) {
+  const fams = ctx.families.filter(f => touchesFamily(fact, f, ctx.families))
+  if (fact.level === 'model') { const n = ctx.products.filter(p => fams.some(f => f.id === p.family_id) && String(p.attributes?.wykonczenie || '').toLowerCase() === String(fact.color || '').toLowerCase()).length; return fams.length ? `Dotyczy: ${fams.map(f => f.model_name).join(', ')} · ${fact.color || '—'} (${n} SKU)` : '' }
+  if (fact.level === 'wariant') { const p = ctx.products.find(x => x.id === fact.product_id); return p ? `Dotyczy: ${p.sku}` : '' }
+  return fams.length ? `Dotyczy: ${fams.map(f => f.model_name).join(', ')}` : ''
+}
+
 function FactCard({ fact, ctx, canApprove, onChanged }) {
   const [content, setContent] = useState(fact.content)
   const [source, setSource] = useState(fact.source || '')
   const [err, setErr] = useState('')
   const notes = (fact.source_note || '').split(' · ').filter(Boolean)
   const needsSource = (fact.source_note || '').startsWith('WYMAGA ŹRÓDŁA')
-  const fams = ctx.families.filter(f => applies(fact, f, ctx.families)).map(f => f.model_name)
-  const dirty = content.trim() !== fact.content || source.trim() !== (fact.source || '')
+  const [scope, setScope] = useState(scopeOf(fact))
+  const [editScope, setEditScope] = useState(false)
+  const who = reach(fact, ctx)
+  const scopeDirty = JSON.stringify(scopeRow(scope)) !== JSON.stringify(scopeRow(scopeOf(fact)))
+  const dirty = content.trim() !== fact.content || source.trim() !== (fact.source || '') || scopeDirty
 
   async function update(patch) {
     setErr('')
@@ -30,9 +72,11 @@ function FactCard({ fact, ctx, canApprove, onChanged }) {
       <div className="fact-main">
         <textarea value={content} onChange={e => setContent(e.target.value)} rows={Math.max(2, Math.ceil(content.length / 90))} aria-label="Treść faktu" />
         <p className="fact-meta">
-          <span className="tag">{scopeLabel(fact, ctx.brands, ctx.families)}</span>
-          <span className={fams.length ? 'muted' : 'hint-inline'}>{fams.length ? `Dotyczy: ${fams.join(', ')}` : 'Nie dotyczy żadnej rodziny w katalogu'}</span>
+          <span className="tag">{scopeLabel(fact, ctx.brands, ctx.families, ctx.products)}</span>
+          <span className={who ? 'muted' : 'hint-inline'}>{who || 'Nie trafi do żadnego opisu – popraw zakres'}</span>
+          {canApprove && <button className="link-dark small" onClick={() => setEditScope(!editScope)}>{editScope ? 'ukryj zakres' : 'zmień zakres'}</button>}
         </p>
+        {editScope && <ScopePicker v={scope} set={setScope} ctx={ctx} />}
         <ul className="notes">
           {notes.map((n, i) => <li key={i} className={n.startsWith('WYMAGA') ? 'tag warn' : 'muted'}>{n}</li>)}
         </ul>
@@ -42,11 +86,11 @@ function FactCard({ fact, ctx, canApprove, onChanged }) {
         <label>Źródło{needsSource && <span className="req"> (wymagane)</span>}
           <input value={source} onChange={e => setSource(e.target.value)} placeholder="np. Raport z badania nr…" />
         </label>
-        {dirty && <button className="btn ghost" onClick={() => update({ content: content.trim(), source: source.trim() || null })}>Zapisz zmiany</button>}
+        {dirty && <button className="btn ghost" disabled={scopeDirty && !scopeComplete(scope)} onClick={() => update({ content: content.trim(), source: source.trim() || null, ...(scopeDirty ? scopeRow(scope) : {}) })}>Zapisz zmiany</button>}
         {canApprove && fact.status === 'do_akceptacji' && (
           <div className="fact-actions">
             <button className="btn" disabled={needsSource && !source.trim()} title={needsSource && !source.trim() ? 'Najpierw wpisz źródło' : ''}
-              onClick={() => update({ content: content.trim(), source: source.trim() || null, status: 'zatwierdzony' })}>Zatwierdź</button>
+              onClick={() => update({ content: content.trim(), source: source.trim() || null, status: 'zatwierdzony', ...(scopeDirty && scopeComplete(scope) ? scopeRow(scope) : {}) })}>Zatwierdź</button>
             <button className="btn ghost danger" onClick={() => update({ status: 'odrzucony' })}>Odrzuć</button>
           </div>
         )}
@@ -59,45 +103,32 @@ function FactCard({ fact, ctx, canApprove, onChanged }) {
 }
 
 function AddFact({ ctx, onAdded }) {
-  const aedler = ctx.brands.find(b => b.name === 'Aedler')?.id || ctx.brands[0]?.id
-  const [f, setF] = useState({ content: '', level: 'seria', brand_id: aedler, technology: '', series: '', family_id: '' })
+  const aedler = ctx.brandsWithProducts.find(b => b.name === 'Aedler')?.id || ctx.brandsWithProducts[0]?.id
+  const [content, setContent] = useState('')
+  const [scope, setScope] = useState({ level: 'seria', brand_id: aedler, technology: '', family_id: '', color: '', product_id: '' })
   const [err, setErr] = useState('')
   async function add(e) {
     e.preventDefault(); setErr('')
-    const row = { content: f.content.trim(), level: f.level, brand_id: f.brand_id || null, source_note: 'Dodany ręcznie',
-      technology: f.level === 'technologia' ? f.technology.trim() : null, series: f.level === 'seria' ? f.series.trim() : null,
-      family_id: ['model', 'wariant'].includes(f.level) ? f.family_id || null : null }
-    const { error } = await supabase.from('kb_facts').insert(row)
-    if (error) setErr(plError(error.message)); else { setF({ ...f, content: '' }); onAdded() }
+    const { error } = await supabase.from('kb_facts').insert({ content: content.trim(), source_note: 'Dodany ręcznie', ...scopeRow(scope) })
+    if (error) setErr(plError(error.message)); else { setContent(''); onAdded() }
   }
   return (
     <details className="panel add-fact">
       <summary>Dodaj fakt ręcznie</summary>
       <form onSubmit={add}>
         <label>Treść faktu (jedno zdanie, z nazwą technologii, serii lub modelu)
-          <textarea rows={2} value={f.content} onChange={e => setF({ ...f, content: e.target.value })} />
+          <textarea rows={2} value={content} onChange={e => setContent(e.target.value)} />
         </label>
-        <div className="grid-form">
-          <label>Poziom<select value={f.level} onChange={e => setF({ ...f, level: e.target.value })}>
-            {Object.entries(LEVEL_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-          <label>Marka<select value={f.brand_id || ''} onChange={e => setF({ ...f, brand_id: e.target.value })}>
-            {ctx.brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
-          {f.level === 'technologia' && <label>Technologia<input list="tech-list" value={f.technology} onChange={e => setF({ ...f, technology: e.target.value })} /></label>}
-          {f.level === 'seria' && <label>Seria<input list="series-list" value={f.series} onChange={e => setF({ ...f, series: e.target.value })} /></label>}
-          {['model', 'wariant'].includes(f.level) && <label>Rodzina<select value={f.family_id} onChange={e => setF({ ...f, family_id: e.target.value })}>
-            <option value="">— wybierz —</option>{ctx.families.map(x => <option key={x.id} value={x.id}>{x.model_name}</option>)}</select></label>}
-        </div>
-        <datalist id="tech-list">{ctx.technologies.map(t => <option key={t} value={t} />)}</datalist>
-        <datalist id="series-list">{ctx.series.map(t => <option key={t} value={t} />)}</datalist>
+        <ScopePicker v={scope} set={setScope} ctx={ctx} />
         {err && <p className="error">{err}</p>}
-        <button className="btn" disabled={f.content.trim().length < 10}>Dodaj do akceptacji</button>
+        <button className="btn" disabled={content.trim().length < 10 || !scopeComplete(scope)}>Dodaj do akceptacji</button>
       </form>
     </details>
   )
 }
 
 function Documents({ ctx, docs, onDone }) {
-  const aedler = ctx.brands.find(b => b.name === 'Aedler')?.id || ctx.brands[0]?.id
+  const aedler = ctx.brandsWithProducts.find(b => b.name === 'Aedler')?.id || ctx.brandsWithProducts[0]?.id
   const [brandId, setBrandId] = useState(aedler)
   const [stage, setStage] = useState('')
   const [err, setErr] = useState('')
@@ -124,7 +155,9 @@ function Documents({ ctx, docs, onDone }) {
       const fams = ctx.families.filter(f => f.brand_id === brandId)
       const res = await runJob('kb_extract', {
         document_id: ins.data.id, file_name: file.name, brand_id: brandId, brand_name: brand?.name, text: text.slice(0, 60000),
-        families: fams.map(f => ({ id: f.id, model_name: f.model_name, series: f.series })), technologies: ctx.technologies, series: ctx.series,
+        families: fams.map(f => { const pr = ctx.products.filter(p => p.family_id === f.id); return { id: f.id, model_name: f.model_name, series: f.series,
+          colors: [...new Set(pr.map(p => p.attributes?.wykonczenie).filter(Boolean))], skus: pr.map(p => ({ id: p.id, sku: p.sku })) } }),
+        technologies: ctx.techs.filter(t => !t.brand_id || t.brand_id === brandId).map(t => t.name), series: fams.map(f => f.model_name),
       }, { timeoutSec: 240 })
       setResult(res); onDone()
     } catch (e2) { setErr(plError(e2.message)) } finally { setStage('') }
@@ -273,23 +306,26 @@ export default function Knowledge({ profile }) {
   const canApprove = ['akceptujacy', 'admin'].includes(profile?.role)
 
   async function load() {
-    const [f, b, fam, d, tq] = await Promise.all([
+    const [f, b, fam, d, tq, pr] = await Promise.all([
       supabase.from('kb_facts').select('*').order('created_at'),
       supabase.from('brands').select('id, name'),
       supabase.from('product_families').select('id, brand_id, model_name, series, technologies').order('model_name'),
       supabase.from('kb_documents').select('*').order('created_at', { ascending: false }),
       supabase.from('kb_technologies').select('*').order('sort'),
+      fetchAll('products', 'id, sku, family_id, attributes').catch(() => []),
     ])
     const err = [f, b, fam, d].find(x => x.error)?.error
     if (err) { setError(plError(err.message)); return }
-    setData({ facts: f.data, brands: b.data, families: fam.data, docs: d.data, techs: tq.error ? [] : (tq.data || []) })
+    setData({ facts: f.data, brands: b.data, families: fam.data, docs: d.data, techs: tq.error ? [] : (tq.data || []), products: pr || [] })
   }
   useEffect(() => { load() }, [])
 
   const ctx = useMemo(() => {
     if (!data) return null
     const uniq = arr => [...new Set(arr.filter(Boolean).map(s => s.trim()))].sort()
-    return { brands: data.brands, families: data.families,
+    // marki tylko z produktami w aplikacji (gdy żadna nie ma – wszystkie)
+    const withP = data.brands.filter(b => data.families.some(f => f.brand_id === b.id))
+    return { brands: data.brands, brandsWithProducts: withP.length ? withP : data.brands, families: data.families, techs: data.techs, products: data.products,
       technologies: data.techs.length ? uniq(data.techs.map(t => t.name)) : uniq([...data.facts.map(f => f.technology), ...data.families.flatMap(f => f.technologies || [])]),
       series: uniq([...data.facts.map(f => f.series), ...data.families.map(f => f.series)]) }
   }, [data])
