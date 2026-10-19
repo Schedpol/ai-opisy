@@ -19,7 +19,7 @@ export const suggestions = (partner, retailers, taken = new Set()) =>
 
 // Kolumny raportu Dealavo (nazwy z dokumentacji; pierwsza znaleziona wygrywa)
 export const COLS = {
-  retailer: ['Retailer'], retailer_price: ['Retailer price'], availability: ['Availability'], price: ['Price'],
+  retailer: ['Retailer'], retailer_price: ['Retailer price'], availability: ['Availability'], price: ['Suggested price', 'Catalogue Price', 'Price'],
   min_price: ['Minimum Price', 'Minimum price'], product_id: ['Id', 'ID'], article: ['Article'], ean: ['EAN'], source: ['Source'], url: ['Url', 'URL'],
 }
 const pick = (row, names) => { for (const n of names) if (row[n] !== undefined && row[n] !== null && row[n] !== '') return row[n]; return null }
