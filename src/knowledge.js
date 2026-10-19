@@ -20,7 +20,8 @@ export function applies(fact, fam, families = [], product = null) {
   switch (fact.level) {
     case 'marka': return !!fact.brand_id
     case 'kategoria': return categoryMatch(fam.category, fact.category)
-    case 'technologia': return (fam.technologies || []).some(t => eq(t, fact.technology))
+    // technologia w kontekście kategorii: „Stabildense · Wanny” ≠ „Stabildense · Brodziki”; bez kategorii = wszystkie kategorie
+    case 'technologia': return (fam.technologies || []).some(t => eq(t, fact.technology)) && (!fact.category || categoryMatch(fam.category, fact.category))
     case 'seria': return familyMatch(fact, fam, families)
     case 'model': return familyMatch(fact, fam, families) && !!product && eq(product.attributes?.wykonczenie, fact.color)
     case 'wariant': return !!product && fact.product_id === product.id
@@ -35,7 +36,7 @@ export function touchesFamily(fact, fam, families = []) {
 }
 
 export const LEVEL_LABEL = { marka: 'Marka', kategoria: 'Kategoria', technologia: 'Technologia', seria: 'Seria', model: 'Model (kolor)', wariant: 'Wariant (SKU)' }
-export const LEVEL_HINT = { marka: 'cała marka', kategoria: 'grupa produktów, np. brodziki, wanny', technologia: 'technologia ze słownika marki', seria: 'rodzina produktów, np. Antis', model: 'seria w konkretnym kolorze', wariant: 'konkretne SKU' }
+export const LEVEL_HINT = { marka: 'cała marka', kategoria: 'grupa produktów, np. brodziki, wanny', technologia: 'technologia w danej kategorii', seria: 'rodzina produktów, np. Antis', model: 'seria w konkretnym kolorze', wariant: 'konkretne SKU' }
 
 export const categoryLabel = key => String(key || '').replace(/(^|\s)\p{L}/u, m => m.toUpperCase())
 
@@ -43,7 +44,8 @@ export function scopeLabel(fact, brands, families, products = [], categories = [
   const brand = brands.find(b => b.id === fact.brand_id)?.name
   const fam = families.find(f => f.id === fact.family_id)?.model_name
   const sku = products.find(p => p.id === fact.product_id)?.sku
-  const what = { marka: brand, kategoria: categories.find(c => c.key === fact.category)?.label || categoryLabel(fact.category), technologia: fact.technology, seria: fam, model: fam && fact.color ? `${fam} · ${fact.color}` : fam, wariant: sku || fam }[fact.level]
+  const catName = categories.find(c => c.key === fact.category)?.label || categoryLabel(fact.category)
+  const what = { marka: brand, kategoria: catName, technologia: fact.technology ? `${fact.technology} · ${fact.category ? catName : 'wszystkie kategorie'}` : null, seria: fam, model: fam && fact.color ? `${fam} · ${fact.color}` : fam, wariant: sku || fam }[fact.level]
   return `${LEVEL_LABEL[fact.level] || fact.level}: ${what || '—'}${brand && fact.level !== 'marka' ? ` · ${brand}` : ''}`
 }
 

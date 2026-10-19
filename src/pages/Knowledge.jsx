@@ -13,7 +13,10 @@ const TABS = [['do_akceptacji', 'Do akceptacji'], ['zatwierdzony', 'Zatwierdzone
 // Zakres faktu: poziom → marka → technologia / seria → kolor / SKU (listy zależne od wcześniejszego wyboru)
 function ScopePicker({ v, set, ctx }) {
   const fams = ctx.families.filter(f => f.brand_id === v.brand_id)
-  const techs = ctx.techs.filter(t => !t.brand_id || t.brand_id === v.brand_id)
+  // technologie występujące w wybranej kategorii (z przypisań rodzin i reguł słownika); bez kategorii – wszystkie marki
+  const techsAll = ctx.techs.filter(t => !t.brand_id || t.brand_id === v.brand_id)
+  const inCat = new Set(ctx.families.filter(f => f.brand_id === v.brand_id && categoryMatch(f.category, v.category)).flatMap(f => (f.technologies || []).map(t => t.toLowerCase())))
+  const techs = v.category ? techsAll.filter(t => inCat.has(t.name.toLowerCase()) || (t.match_category && categoryMatch(t.match_category, v.category))) : techsAll
   const prods = ctx.products.filter(p => p.family_id === v.family_id).sort((a, b) => a.sku.localeCompare(b.sku))
   const colors = [...new Set(prods.map(p => p.attributes?.wykonczenie).filter(Boolean))].sort()
   const brandName = ctx.brands.find(b => b.id === v.brand_id)?.name
@@ -25,8 +28,8 @@ function ScopePicker({ v, set, ctx }) {
         {Object.entries(LEVEL_LABEL).map(([k, l]) => <option key={k} value={k}>{l} – {LEVEL_HINT[k]}</option>)}</select></label>
       <label>Marka<select value={v.brand_id || ''} onChange={e => up({ brand_id: e.target.value, category: '', technology: '', family_id: '', color: '', product_id: '' })}>
         {ctx.brandsWithProducts.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
-      {v.level === 'kategoria' && <label>Kategoria<select value={v.category || ''} onChange={e => up({ category: e.target.value })}>
-        <option value="">— wybierz —</option>{cats.map(c => <option key={c.key} value={c.key}>{c.sub ? '\u00a0\u00a0› ' : ''}{c.label}</option>)}
+      {['kategoria', 'technologia'].includes(v.level) && <label>Kategoria<select value={v.level === 'technologia' && v.allCats ? '__all' : v.category || ''} onChange={e => up(e.target.value === '__all' ? { category: '', allCats: true } : { category: e.target.value, allCats: false })}>
+        <option value="">— wybierz —</option>{v.level === 'technologia' && <option value="__all">wszystkie kategorie (fakt o samej technologii)</option>}{cats.map(c => <option key={c.key} value={c.key}>{c.sub ? '\u00a0\u00a0› ' : ''}{c.label}</option>)}
         {v.category && !cats.some(c => c.key === v.category) && <option value={v.category}>{v.category} (brak w drzewie)</option>}</select></label>}
       {v.level === 'technologia' && <label>Technologia<select value={v.technology || ''} onChange={e => up({ technology: e.target.value })}>
         <option value="">— wybierz —</option>{techs.map(t => <option key={t.id} value={t.name}>{t.parent_id ? '\u00a0\u00a0› ' : ''}{t.name}</option>)}
@@ -41,16 +44,20 @@ function ScopePicker({ v, set, ctx }) {
     </div>
   )
 }
-const scopeComplete = v => v.level === 'marka' ? !!v.brand_id : v.level === 'kategoria' ? !!v.category : v.level === 'technologia' ? !!v.technology : v.level === 'seria' ? !!v.family_id : v.level === 'model' ? !!(v.family_id && v.color) : !!(v.family_id && v.product_id)
-const scopeRow = v => ({ level: v.level, brand_id: v.brand_id || null, category: v.level === 'kategoria' ? v.category || null : null, technology: v.level === 'technologia' ? v.technology || null : null, series: null,
+const scopeComplete = v => v.level === 'marka' ? !!v.brand_id : v.level === 'kategoria' ? !!v.category : v.level === 'technologia' ? !!v.technology && (!!v.category || !!v.allCats) : v.level === 'seria' ? !!v.family_id : v.level === 'model' ? !!(v.family_id && v.color) : !!(v.family_id && v.product_id)
+const scopeRow = v => ({ level: v.level, brand_id: v.brand_id || null, category: ['kategoria', 'technologia'].includes(v.level) ? v.category || null : null, technology: v.level === 'technologia' ? v.technology || null : null, series: null,
   family_id: ['seria', 'model', 'wariant'].includes(v.level) ? v.family_id || null : null, color: v.level === 'model' ? v.color || null : null, product_id: v.level === 'wariant' ? v.product_id || null : null })
-const scopeOf = f => ({ level: f.level, brand_id: f.brand_id || '', category: f.category || '', technology: f.technology || '', family_id: f.family_id || '', color: f.color || '', product_id: f.product_id || '' })
+const scopeOf = f => ({ level: f.level, brand_id: f.brand_id || '', category: f.category || '', allCats: f.level === 'technologia' && !!f.technology && !f.category, technology: f.technology || '', family_id: f.family_id || '', color: f.color || '', product_id: f.product_id || '' })
 
 // Komu fakt trafi do opisów (czytelny podgląd zakresu)
 function reach(fact, ctx) {
   const fams = ctx.families.filter(f => touchesFamily(fact, f, ctx.families))
   if (fact.level === 'model') { const n = ctx.products.filter(p => fams.some(f => f.id === p.family_id) && String(p.attributes?.wykonczenie || '').toLowerCase() === String(fact.color || '').toLowerCase()).length; return fams.length ? `Dotyczy: ${fams.map(f => f.model_name).join(', ')} · ${fact.color || '—'} (${n} SKU)` : '' }
   if (fact.level === 'wariant') { const p = ctx.products.find(x => x.id === fact.product_id); return p ? `Dotyczy: ${p.sku}` : '' }
+  if (fact.level === 'technologia') {
+    const cs = [...new Set(fams.map(f => f.category).filter(Boolean))]
+    return fams.length ? `Dotyczy: ${fams.map(f => f.model_name).join(', ')}${!fact.category && cs.length > 1 ? ` – UWAGA: różne kategorie (${cs.join(', ')}), sprawdź, czy fakt pasuje do każdej` : ''}` : ''
+  }
   if (fact.level === 'kategoria' || fact.level === 'marka') return fams.length ? `Dotyczy: ${fams.length} ${plural(fams.length, 'seria', 'serie', 'serii')} (${fams.slice(0, 6).map(f => f.model_name).join(', ')}${fams.length > 6 ? '…' : ''})` : ''
   return fams.length ? `Dotyczy: ${fams.map(f => f.model_name).join(', ')}` : ''
 }
@@ -237,7 +244,7 @@ function Technologies({ data, admin, onChanged }) {
   }
   const Row = ({ t, child }) => (
     <li className={child ? 'tech child' : 'tech'}>
-      <strong>{t.name}</strong> <span className="muted small">{brand(t.brand_id)} · {odm(famCount(t.name), 'rodzina', 'rodziny', 'rodzin')} · {odm(factCount(t.name), 'fakt', 'fakty', 'faktów')}{t.match_category ? ` · kategoria „${t.match_category}”` : ''}{t.match_series ? ` · seria „${t.match_series}”` : ''}</span>
+      <strong>{t.name}</strong> <span className="muted small">{brand(t.brand_id)}{(() => { const cs = [...new Set(data.families.filter(fm => (fm.technologies || []).includes(t.name)).map(fm => fm.category).filter(Boolean))]; return cs.length ? ` · w kategoriach: ${cs.join(', ')}` : '' })()} · {odm(famCount(t.name), 'rodzina', 'rodziny', 'rodzin')} · {odm(factCount(t.name), 'fakt', 'fakty', 'faktów')}{t.match_category ? ` · kategoria „${t.match_category}”` : ''}{t.match_series ? ` · seria „${t.match_series}”` : ''}</span>
       {data.techs.filter(c => c.parent_id === t.id).length > 0 && <ul>{data.techs.filter(c => c.parent_id === t.id).map(c => <Row key={c.id} t={c} child />)}</ul>}
     </li>
   )

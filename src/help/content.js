@@ -129,7 +129,7 @@ export const SCREEN_HELP = [
 - Nowa końcówka SKU = nowa reguła, potem ponowny import produktów.
 - Uwaga: w SKU Aedler **B/SC = czarny**, w kodach Schedpol **B/ST = biały**.` },
   { path: '/wiedza', title: 'Księga wiedzy', section: 'jakosc', md: `- **Technologie** (u góry): hierarchia, np. Stabildense › technologia kompozytowa / zintegrowana. Fakt o Stabildense trafia do obu odmian, fakt o technologii kompozytowej – tylko do brodzików kompozytowych.
-- **Poziomy:** marka → kategoria (np. brodziki – wszystkie, albo brodziki › kompozytowe – tylko te) → technologia → seria (np. Antis) → model (seria w kolorze, np. Antis · Black Scale) → wariant (konkretne SKU). Fakt koloru trafia tylko do SKU w tym kolorze, fakt wariantu – tylko do tego SKU.
+- **Poziomy:** marka → kategoria (np. brodziki – wszystkie, albo brodziki › kompozytowe – tylko te) → technologia **w kategorii** (np. Stabildense · Brodziki ≠ Stabildense · Wanny; „wszystkie kategorie” tylko dla cech samej technologii) → seria (np. Antis) → model (seria w kolorze, np. Antis · Black Scale) → wariant (konkretne SKU). Fakt koloru trafia tylko do SKU w tym kolorze, fakt wariantu – tylko do tego SKU.
 - Wgraj DOCX – AI wyciągnie fakty jako propozycje. Przy fakcie z uwagą „zmień zakres” popraw poziom przed zatwierdzeniem.
 - Akceptujący zatwierdza tylko fakty potwierdzone w dokumentacji.
 - Fakty serii i koloru obowiązują też zestaw tej serii (np. „Antis + nośnik”).` },
