@@ -1,4 +1,4 @@
-// Poziomy: marka → technologia → seria (rodzina, np. Antis) → model (seria w kolorze) → wariant (SKU)
+// Poziomy: marka → kategoria → technologia → seria (rodzina, np. Antis) → model (seria w kolorze) → wariant (SKU)
 const eq = (a, b) => String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase()
 
 export const baseModel = name => String(name || '').split(' + ')[0].trim()
@@ -11,11 +11,15 @@ function familyMatch(fact, fam, families) {
   return !!src && src.brand_id === fam.brand_id && eq(src.model_name, baseModel(fam.model_name)) && fam.model_name !== src.model_name
 }
 
+// kategoria faktu „brodziki” obejmuje „brodziki standard”, „brodziki kompozytowe”…; „brodziki kompozytowe” – tylko siebie
+export const categoryMatch = (famCat, factCat) => { const a = String(famCat || '').trim().toLowerCase(), b = String(factCat || '').trim().toLowerCase(); return !!b && (a === b || a.startsWith(b + ' ')) }
+
 // Czy fakt dotyczy produktu (product = konkretny SKU; bez niego tylko poziomy ogólne)
 export function applies(fact, fam, families = [], product = null) {
   if (fact.brand_id && fact.brand_id !== fam.brand_id) return false
   switch (fact.level) {
     case 'marka': return !!fact.brand_id
+    case 'kategoria': return categoryMatch(fam.category, fact.category)
     case 'technologia': return (fam.technologies || []).some(t => eq(t, fact.technology))
     case 'seria': return familyMatch(fact, fam, families)
     case 'model': return familyMatch(fact, fam, families) && !!product && eq(product.attributes?.wykonczenie, fact.color)
@@ -30,14 +34,16 @@ export function touchesFamily(fact, fam, families = []) {
   return applies(fact, fam, families)
 }
 
-export const LEVEL_LABEL = { marka: 'Marka', technologia: 'Technologia', seria: 'Seria', model: 'Model (kolor)', wariant: 'Wariant (SKU)' }
-export const LEVEL_HINT = { marka: 'cała marka', technologia: 'technologia ze słownika marki', seria: 'rodzina produktów, np. Antis', model: 'seria w konkretnym kolorze', wariant: 'konkretne SKU' }
+export const LEVEL_LABEL = { marka: 'Marka', kategoria: 'Kategoria', technologia: 'Technologia', seria: 'Seria', model: 'Model (kolor)', wariant: 'Wariant (SKU)' }
+export const LEVEL_HINT = { marka: 'cała marka', kategoria: 'grupa produktów, np. brodziki, wanny', technologia: 'technologia ze słownika marki', seria: 'rodzina produktów, np. Antis', model: 'seria w konkretnym kolorze', wariant: 'konkretne SKU' }
 
-export function scopeLabel(fact, brands, families, products = []) {
+export const categoryLabel = key => String(key || '').replace(/(^|\s)\p{L}/u, m => m.toUpperCase())
+
+export function scopeLabel(fact, brands, families, products = [], categories = []) {
   const brand = brands.find(b => b.id === fact.brand_id)?.name
   const fam = families.find(f => f.id === fact.family_id)?.model_name
   const sku = products.find(p => p.id === fact.product_id)?.sku
-  const what = { marka: brand, technologia: fact.technology, seria: fam, model: fam && fact.color ? `${fam} · ${fact.color}` : fam, wariant: sku || fam }[fact.level]
+  const what = { marka: brand, kategoria: categories.find(c => c.key === fact.category)?.label || categoryLabel(fact.category), technologia: fact.technology, seria: fam, model: fam && fact.color ? `${fam} · ${fact.color}` : fam, wariant: sku || fam }[fact.level]
   return `${LEVEL_LABEL[fact.level] || fact.level}: ${what || '—'}${brand && fact.level !== 'marka' ? ` · ${brand}` : ''}`
 }
 

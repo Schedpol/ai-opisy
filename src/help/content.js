@@ -26,7 +26,7 @@ Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne 
 | [Drzewo produktów](/drzewo) | asortyment z PIM jako **lista** (marka › kategoria › model › SKU) albo **diagram** (kategoria › technologia › model › kolor › kształt › rozmiar › odpływ › SKU), pokrycie opisami per rynek, raport jakości danych PIM | wszyscy; wgrywa listę admin |
 | [Produkty](/produkty) | import z Baselinkera, rodziny (modele), wybór wariantu wiodącego, generacja opisu bazowego | generujący |
 | [Słownik importu](/slownik) | reguły odczytu atrybutów z SKU: kolor (np. B/SC = Black Scale), powłoka (AP1), odpływ, kształt, zestaw z nośnikiem (/NO), role zdjęć | admin |
-| [Księga wiedzy](/wiedza) | fakty na 5 poziomach: marka, technologia (ze słownika marki), seria (np. Antis), model (seria w kolorze), wariant (SKU); wgrywanie DOCX z automatycznym wyciąganiem faktów | dodaje generujący, zatwierdza akceptujący |
+| [Księga wiedzy](/wiedza) | fakty na 6 poziomach: marka, kategoria (np. brodziki, wanny), technologia (ze słownika marki), seria (np. Antis), model (seria w kolorze), wariant (SKU); wgrywanie DOCX z automatycznym wyciąganiem faktów | dodaje generujący, zatwierdza akceptujący |
 | [Szablony](/szablony) | układ opisu: kanał › rynek › kategoria; sekcje, grafiki (z serwera wg konwencji), format HTML (eMAG / Kaufland / własny) | admin |
 | [Biblioteka grafik](/biblioteka) | banery i grafiki wspólne dla marki, technologii, serii lub modelu | admin |
 | [Frazy kluczowe](/frazy) | banki fraz per kategoria i język (DataForSEO), frazy startowe, wykluczenia | generujący; frazy startowe zatwierdza akceptujący |
@@ -129,7 +129,7 @@ export const SCREEN_HELP = [
 - Nowa końcówka SKU = nowa reguła, potem ponowny import produktów.
 - Uwaga: w SKU Aedler **B/SC = czarny**, w kodach Schedpol **B/ST = biały**.` },
   { path: '/wiedza', title: 'Księga wiedzy', section: 'jakosc', md: `- **Technologie** (u góry): hierarchia, np. Stabildense › technologia kompozytowa / zintegrowana. Fakt o Stabildense trafia do obu odmian, fakt o technologii kompozytowej – tylko do brodzików kompozytowych.
-- **Poziomy:** marka → technologia → seria (np. Antis) → model (seria w kolorze, np. Antis · Black Scale) → wariant (konkretne SKU). Fakt koloru trafia tylko do SKU w tym kolorze, fakt wariantu – tylko do tego SKU.
+- **Poziomy:** marka → kategoria (np. brodziki – wszystkie, albo brodziki › kompozytowe – tylko te) → technologia → seria (np. Antis) → model (seria w kolorze, np. Antis · Black Scale) → wariant (konkretne SKU). Fakt koloru trafia tylko do SKU w tym kolorze, fakt wariantu – tylko do tego SKU.
 - Wgraj DOCX – AI wyciągnie fakty jako propozycje. Przy fakcie z uwagą „zmień zakres” popraw poziom przed zatwierdzeniem.
 - Akceptujący zatwierdza tylko fakty potwierdzone w dokumentacji.
 - Fakty serii i koloru obowiązują też zestaw tej serii (np. „Antis + nośnik”).` },

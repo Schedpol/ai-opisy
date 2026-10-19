@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import mammoth from 'mammoth/mammoth.browser.js'
 import { supabase, plError, fetchAll } from '../supabase.js'
-import { applies, touchesFamily, scopeLabel, LEVEL_LABEL, LEVEL_HINT } from '../knowledge.js'
+import { applies, touchesFamily, scopeLabel, LEVEL_LABEL, LEVEL_HINT, categoryMatch } from '../knowledge.js'
 import { runJob } from '../jobs.js'
 import DrainLoader from '../components/DrainLoader.jsx'
 import { autoAssignTechnologies } from '../knowledge.js'
@@ -16,13 +16,18 @@ function ScopePicker({ v, set, ctx }) {
   const techs = ctx.techs.filter(t => !t.brand_id || t.brand_id === v.brand_id)
   const prods = ctx.products.filter(p => p.family_id === v.family_id).sort((a, b) => a.sku.localeCompare(b.sku))
   const colors = [...new Set(prods.map(p => p.attributes?.wykonczenie).filter(Boolean))].sort()
+  const brandName = ctx.brands.find(b => b.id === v.brand_id)?.name
+  const cats = ctx.categories.filter(c => !c.brand || !brandName || c.brand === brandName)
   const up = patch => set({ ...v, ...patch })
   return (
     <div className="grid-form scope-picker">
       <label>Poziom<select value={v.level} onChange={e => up({ level: e.target.value })}>
         {Object.entries(LEVEL_LABEL).map(([k, l]) => <option key={k} value={k}>{l} – {LEVEL_HINT[k]}</option>)}</select></label>
-      <label>Marka<select value={v.brand_id || ''} onChange={e => up({ brand_id: e.target.value, technology: '', family_id: '', color: '', product_id: '' })}>
+      <label>Marka<select value={v.brand_id || ''} onChange={e => up({ brand_id: e.target.value, category: '', technology: '', family_id: '', color: '', product_id: '' })}>
         {ctx.brandsWithProducts.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></label>
+      {v.level === 'kategoria' && <label>Kategoria<select value={v.category || ''} onChange={e => up({ category: e.target.value })}>
+        <option value="">— wybierz —</option>{cats.map(c => <option key={c.key} value={c.key}>{c.sub ? '\u00a0\u00a0› ' : ''}{c.label}</option>)}
+        {v.category && !cats.some(c => c.key === v.category) && <option value={v.category}>{v.category} (brak w drzewie)</option>}</select></label>}
       {v.level === 'technologia' && <label>Technologia<select value={v.technology || ''} onChange={e => up({ technology: e.target.value })}>
         <option value="">— wybierz —</option>{techs.map(t => <option key={t.id} value={t.name}>{t.parent_id ? '\u00a0\u00a0› ' : ''}{t.name}</option>)}
         {v.technology && !techs.some(t => t.name === v.technology) && <option value={v.technology}>{v.technology} (spoza słownika)</option>}</select></label>}
@@ -36,16 +41,17 @@ function ScopePicker({ v, set, ctx }) {
     </div>
   )
 }
-const scopeComplete = v => v.level === 'marka' ? !!v.brand_id : v.level === 'technologia' ? !!v.technology : v.level === 'seria' ? !!v.family_id : v.level === 'model' ? !!(v.family_id && v.color) : !!(v.family_id && v.product_id)
-const scopeRow = v => ({ level: v.level, brand_id: v.brand_id || null, technology: v.level === 'technologia' ? v.technology || null : null, series: null,
+const scopeComplete = v => v.level === 'marka' ? !!v.brand_id : v.level === 'kategoria' ? !!v.category : v.level === 'technologia' ? !!v.technology : v.level === 'seria' ? !!v.family_id : v.level === 'model' ? !!(v.family_id && v.color) : !!(v.family_id && v.product_id)
+const scopeRow = v => ({ level: v.level, brand_id: v.brand_id || null, category: v.level === 'kategoria' ? v.category || null : null, technology: v.level === 'technologia' ? v.technology || null : null, series: null,
   family_id: ['seria', 'model', 'wariant'].includes(v.level) ? v.family_id || null : null, color: v.level === 'model' ? v.color || null : null, product_id: v.level === 'wariant' ? v.product_id || null : null })
-const scopeOf = f => ({ level: f.level, brand_id: f.brand_id || '', technology: f.technology || '', family_id: f.family_id || '', color: f.color || '', product_id: f.product_id || '' })
+const scopeOf = f => ({ level: f.level, brand_id: f.brand_id || '', category: f.category || '', technology: f.technology || '', family_id: f.family_id || '', color: f.color || '', product_id: f.product_id || '' })
 
 // Komu fakt trafi do opisów (czytelny podgląd zakresu)
 function reach(fact, ctx) {
   const fams = ctx.families.filter(f => touchesFamily(fact, f, ctx.families))
   if (fact.level === 'model') { const n = ctx.products.filter(p => fams.some(f => f.id === p.family_id) && String(p.attributes?.wykonczenie || '').toLowerCase() === String(fact.color || '').toLowerCase()).length; return fams.length ? `Dotyczy: ${fams.map(f => f.model_name).join(', ')} · ${fact.color || '—'} (${n} SKU)` : '' }
   if (fact.level === 'wariant') { const p = ctx.products.find(x => x.id === fact.product_id); return p ? `Dotyczy: ${p.sku}` : '' }
+  if (fact.level === 'kategoria' || fact.level === 'marka') return fams.length ? `Dotyczy: ${fams.length} ${plural(fams.length, 'seria', 'serie', 'serii')} (${fams.slice(0, 6).map(f => f.model_name).join(', ')}${fams.length > 6 ? '…' : ''})` : ''
   return fams.length ? `Dotyczy: ${fams.map(f => f.model_name).join(', ')}` : ''
 }
 
@@ -72,7 +78,7 @@ function FactCard({ fact, ctx, canApprove, onChanged }) {
       <div className="fact-main">
         <textarea value={content} onChange={e => setContent(e.target.value)} rows={Math.max(2, Math.ceil(content.length / 90))} aria-label="Treść faktu" />
         <p className="fact-meta">
-          <span className="tag">{scopeLabel(fact, ctx.brands, ctx.families, ctx.products)}</span>
+          <span className="tag">{scopeLabel(fact, ctx.brands, ctx.families, ctx.products, ctx.categories)}</span>
           <span className={who ? 'muted' : 'hint-inline'}>{who || 'Nie trafi do żadnego opisu – popraw zakres'}</span>
           {canApprove && <button className="link-dark small" onClick={() => setEditScope(!editScope)}>{editScope ? 'ukryj zakres' : 'zmień zakres'}</button>}
         </p>
@@ -105,7 +111,7 @@ function FactCard({ fact, ctx, canApprove, onChanged }) {
 function AddFact({ ctx, onAdded }) {
   const aedler = ctx.brandsWithProducts.find(b => b.name === 'Aedler')?.id || ctx.brandsWithProducts[0]?.id
   const [content, setContent] = useState('')
-  const [scope, setScope] = useState({ level: 'seria', brand_id: aedler, technology: '', family_id: '', color: '', product_id: '' })
+  const [scope, setScope] = useState({ level: 'seria', brand_id: aedler, category: '', technology: '', family_id: '', color: '', product_id: '' })
   const [err, setErr] = useState('')
   async function add(e) {
     e.preventDefault(); setErr('')
@@ -158,6 +164,7 @@ function Documents({ ctx, docs, onDone }) {
         families: fams.map(f => { const pr = ctx.products.filter(p => p.family_id === f.id); return { id: f.id, model_name: f.model_name, series: f.series,
           colors: [...new Set(pr.map(p => p.attributes?.wykonczenie).filter(Boolean))], skus: pr.map(p => ({ id: p.id, sku: p.sku })) } }),
         technologies: ctx.techs.filter(t => !t.brand_id || t.brand_id === brandId).map(t => t.name), series: fams.map(f => f.model_name),
+        categories: ctx.categories.filter(c => !c.brand || c.brand === brand?.name).map(c => ({ key: c.key, label: c.label })),
       }, { timeoutSec: 240 })
       setResult(res); onDone()
     } catch (e2) { setErr(plError(e2.message)) } finally { setStage('') }
@@ -306,17 +313,18 @@ export default function Knowledge({ profile }) {
   const canApprove = ['akceptujacy', 'admin'].includes(profile?.role)
 
   async function load() {
-    const [f, b, fam, d, tq, pr] = await Promise.all([
+    const [f, b, fam, d, tq, pr, as] = await Promise.all([
       supabase.from('kb_facts').select('*').order('created_at'),
       supabase.from('brands').select('id, name'),
-      supabase.from('product_families').select('id, brand_id, model_name, series, technologies').order('model_name'),
+      supabase.from('product_families').select('id, brand_id, model_name, series, category, technologies').order('model_name'),
       supabase.from('kb_documents').select('*').order('created_at', { ascending: false }),
       supabase.from('kb_technologies').select('*').order('sort'),
       fetchAll('products', 'id, sku, family_id, attributes').catch(() => []),
+      fetchAll('assortment', 'brand, category_path').catch(() => []),
     ])
     const err = [f, b, fam, d].find(x => x.error)?.error
     if (err) { setError(plError(err.message)); return }
-    setData({ facts: f.data, brands: b.data, families: fam.data, docs: d.data, techs: tq.error ? [] : (tq.data || []), products: pr || [] })
+    setData({ facts: f.data, brands: b.data, families: fam.data, docs: d.data, techs: tq.error ? [] : (tq.data || []), products: pr || [], paths: as || [] })
   }
   useEffect(() => { load() }, [])
 
@@ -325,7 +333,17 @@ export default function Knowledge({ profile }) {
     const uniq = arr => [...new Set(arr.filter(Boolean).map(s => s.trim()))].sort()
     // marki tylko z produktami w aplikacji (gdy żadna nie ma – wszystkie)
     const withP = data.brands.filter(b => data.families.some(f => f.brand_id === b.id))
-    return { brands: data.brands, brandsWithProducts: withP.length ? withP : data.brands, families: data.families, techs: data.techs, products: data.products,
+    // kategorie: z drzewa PIM (poziom główny + podkategorie), a gdy drzewa brak – z kategorii rodzin
+    const cm = new Map()
+    for (const r of data.paths) {
+      const path = (r.category_path || []).filter(Boolean); if (!path.length) continue
+      const top = path[0].toLowerCase()
+      if (!cm.has(top)) cm.set(top, { key: top, label: path[0], brand: r.brand, sub: false })
+      if (path.length > 1) { const key = path.join(' ').toLowerCase(); if (!cm.has(key)) cm.set(key, { key, label: path.join(' › '), brand: r.brand, sub: true }) }
+    }
+    if (!cm.size) data.families.forEach(f => f.category && !cm.has(f.category) && cm.set(f.category, { key: f.category, label: f.category.replace(/^\p{L}/u, m => m.toUpperCase()), brand: null, sub: false }))
+    const categories = [...cm.values()].sort((a, b) => a.key.localeCompare(b.key, 'pl'))
+    return { categories, brands: data.brands, brandsWithProducts: withP.length ? withP : data.brands, families: data.families, techs: data.techs, products: data.products,
       technologies: data.techs.length ? uniq(data.techs.map(t => t.name)) : uniq([...data.facts.map(f => f.technology), ...data.families.flatMap(f => f.technologies || [])]),
       series: uniq([...data.facts.map(f => f.series), ...data.families.map(f => f.series)]) }
   }, [data])
