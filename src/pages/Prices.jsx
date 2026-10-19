@@ -111,7 +111,8 @@ export default function Prices({ profile }) {
     setBusy(true); setMsg(null)
     try {
       const r = await runJob('dealavo_sync', {}, { url: DATA_URL, timeoutSec: 300 })
-      setMsg({ type: 'ok', text: `Pobrano aktualizację z ${when(r?.update_time)}: ${r?.rows ?? '?'} ofert w raporcie, ${r?.tracked ?? '?'} u śledzonych partnerów.` }); load()
+      const ref = r?.reference === 'Catalogue Price' ? 'ceny katalogowej' : r?.reference === 'Price' ? 'ceny Waszego sklepu' : null
+      setMsg({ type: r?.has_min_price === false ? 'hint' : 'ok', text: `Pobrano aktualizację z ${when(r?.update_time)}: ${r?.rows ?? '?'} dostępnych ofert w raporcie, ${r?.tracked ?? '?'} w kanałach śledzonych podmiotów.${ref ? ` Rozbieżność liczona od ${ref}.` : ''}${r?.has_min_price === false ? ' Uwaga: konto Dealavo nie udostępnia kolumny „Minimum Price” – naruszeń ceny minimalnej nie da się policzyć.' : ''}` }); load()
     } catch (e) { setMsg({ type: 'error', text: /nie obsługuje zadania|kod 404/.test(e.message) ? 'Workflow „Studio – dane rynkowe” nie jest jeszcze włączony w n8n.' : plError(e.message) }) } finally { setBusy(false) }
   }
   function exportCsv() {
@@ -130,7 +131,7 @@ export default function Prices({ profile }) {
   return (
     <section className="page wide">
       <h1>Ceny u partnerów</h1>
-      <p className="muted lead">Dane z Dealavo (Polska): ceny dostępnych ofert u partnerów wobec Waszej ceny referencyjnej i cen minimalnych. Rozbieżność bez kosztu wysyłki; wartość ujemna = partner sprzedaje taniej.</p>
+      <p className="muted lead">Dane z Dealavo (Polska): ceny dostępnych ofert u partnerów wobec ceny katalogowej (sugerowanej) i cen minimalnych. Rozbieżność bez kosztu wysyłki; wartość ujemna = partner sprzedaje taniej.</p>
       <div className="panel">
         <div className="prices-head">
           <span>{d.last ? <>Ostatnia aktualizacja Dealavo: <strong>{when(d.last)}</strong></> : <span className="muted">Dane z Dealavo nie były jeszcze pobrane.</span>}</span>
