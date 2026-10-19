@@ -137,6 +137,7 @@ function BelowHistory({ partner, channels, quarters, stats }) {
 function FileImport({ d, onDone }) {
   const [files, setFiles] = useState([])
   const [skipExisting, setSkipExisting] = useState(true)
+  const [ack, setAck] = useState(false)
   const [st, setSt] = useState(null)
   const [err, setErr] = useState('')
   async function pick(list) {
@@ -172,6 +173,7 @@ function FileImport({ d, onDone }) {
     <div className="file-import">
       <h3>Z pliku – raport cenowy z panelu Dealavo</h3>
       <p className="muted small">Raport z panelu zawiera ceny dzienne z ok. 29 dni wstecz, więc kwartał to 4 pliki. Wybierz kilka naraz – dni powtarzające się w plikach liczą się raz. Nie zużywa wykonań n8n.</p>
+      <p className="hint small"><strong>Uwaga:</strong> raport ma jedną cenę katalogową na ofertę – z dnia wygenerowania raportu – i porównuje z nią ceny ze wszystkich 29 dni. Jeśli w tym okresie zmienialiście ceny katalogowe (np. promocja), naruszenia będą policzone błędnie. Dla takich okresów użyj pobierania przez API poniżej – liczy każdy dzień od ceny obowiązującej tego dnia.</p>
       <input type="file" accept=".xlsx" multiple onChange={e => pick([...e.target.files])} disabled={st?.running} />
       {err && <p className="error">{err}</p>}
       {plan && !st?.running && (
@@ -180,7 +182,8 @@ function FileImport({ d, onDone }) {
           <p className="small">Do importu: <strong>{plan.days.length} dni</strong>{plan.days.length ? ` (${dayOf(plan.days[0])} – ${dayOf(plan.days.at(-1))})` : ''}{plan.skipped.length ? ` · ${plan.skipped.length} pominiętych, bo są już w historii` : ''} · oferty w kanałach śledzonych podmiotów: <strong>{plan.matchedRows}</strong> z {plan.totalRows} · naruszeń: {plan.violations.length}</p>
           {top.length > 0 && <p className="muted small">Najczęstsi sprzedawcy bez przypisania do podmiotu: {top.map(([n, c]) => `${n} (${c})`).join(', ')}. Jeśli to któryś z Waszych partnerów – dodaj kanał przed importem.</p>}
           <label className="check small"><input type="checkbox" checked={skipExisting} onChange={e => setSkipExisting(e.target.checked)} /> pomiń dni, które są już w historii</label>
-          <div className="row-actions"><button className="btn" disabled={!plan.days.length} onClick={run}>Importuj {plan.days.length} dni</button></div>
+          <label className="check small"><input type="checkbox" checked={ack} onChange={e => setAck(e.target.checked)} /> w tym okresie nie zmienialiśmy cen katalogowych w Dealavo</label>
+          <div className="row-actions"><button className="btn" disabled={!plan.days.length || !ack} onClick={run}>Importuj {plan.days.length} dni</button></div>
         </div>
       )}
       {st && <p className={st.running ? 'muted working' : 'ok'} role="status">{st.text}</p>}
