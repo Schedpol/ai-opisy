@@ -86,7 +86,7 @@ function BelowNow({ offers, channels }) {
   if (!rows.length) return <p className="muted">Żaden produkt nie ma teraz ceny poniżej katalogowej.</p>
   return (
     <div className="table-wrap"><table className="compact">
-      <thead><tr><th>Produkt</th><th className="num-cell">Cena katalogowa</th><th className="num-cell">Najniższa cena</th><th className="num-cell">Poniżej o</th><th>Kanały (cena)</th></tr></thead>
+      <thead><tr><th>Produkt</th><th className="num-cell" title="Promocyjna, jeśli obowiązywała, inaczej katalogowa – z cennika Studio">Cena minimalna</th><th className="num-cell">Najniższa cena</th><th className="num-cell">Poniżej o</th><th>Kanały (cena)</th></tr></thead>
       <tbody>{rows.map(g => (
         <tr key={g.product_id} className="below-min">
           <td>{g.url ? <a href={g.url} target="_blank" rel="noreferrer">{g.article || g.product_id}</a> : (g.article || g.product_id)}{g.ean && <span className="muted small mono"> {g.ean}</span>}</td>
@@ -115,7 +115,7 @@ function BelowHistory({ partner, channels, quarters, stats }) {
       </div>
       {rows === null ? <DrainLoader /> : rows.length === 0 ? <p className="muted">W tym kwartale żaden produkt nie był poniżej ceny katalogowej.</p> : (
         <div className="table-wrap"><table className="compact">
-          <thead><tr><th>Produkt</th><th className="num-cell">Cena katalogowa</th><th className="num-cell">Najniższa cena</th><th className="num-cell">Maks. poniżej</th><th>Kanały</th><th className="num-cell">W ilu pobraniach</th><th>Pierwszy / ostatni raz</th></tr></thead>
+          <thead><tr><th>Produkt</th><th className="num-cell" title="Promocyjna, jeśli obowiązywała, inaczej katalogowa – z cennika Studio">Cena minimalna</th><th className="num-cell">Najniższa cena</th><th className="num-cell">Maks. poniżej</th><th>Kanały</th><th className="num-cell">W ilu pobraniach</th><th>Pierwszy / ostatni raz</th></tr></thead>
           <tbody>{rows.map(v => (
             <tr key={v.product_id}>
               <td>{v.url ? <a href={v.url} target="_blank" rel="noreferrer">{v.article || v.product_id}</a> : (v.article || v.product_id)}{v.ean && <span className="muted small mono"> {v.ean}</span>}</td>
@@ -349,9 +349,8 @@ export default function Prices({ profile }) {
     setBusy(true); setMsg(null)
     try {
       const r = await runJob('dealavo_sync', {}, { url: DATA_URL, timeoutSec: 300 })
-      const refName = /suggested/i.test(r?.reference || '') ? 'ceny katalogowej (w API Dealavo: „Suggested price”)' : r?.reference === 'Catalogue Price' ? 'ceny katalogowej' : r?.reference === 'Price' ? 'ceny Waszego sklepu' : null
-      const sameMin = r?.min_price_column && r.min_price_column === r.reference
-      setMsg({ type: r?.has_min_price === false ? 'hint' : 'ok', text: `Pobrano aktualizację z ${when(r?.update_time)}: ${r?.brand_filter ? `marka ${r.brand_filter} – ${r.rows} z ${r.rows_all} dostępnych ofert` : `${r?.rows ?? '?'} dostępnych ofert`}, ${r?.tracked ?? '?'} w kanałach śledzonych podmiotów.${refName ? ` Rozbieżność${sameMin ? ' i naruszenia ceny minimalnej' : ''} liczone od ${refName}.` : ''}${r?.has_min_price === false ? ' Uwaga: brak cen minimalnych – naruszeń nie da się policzyć.' : ''}` }); load()
+      const ex = (r?.unmatched_sample || []).slice(0, 5).map(x => `${x.article || x.ean || x.producer_code || '?'} (${x.offers})`).join(', ')
+      setMsg({ type: r?.matched ? 'ok' : 'hint', text: `Pobrano aktualizację z ${when(r?.update_time)}: ${r?.rows ?? '?'} dostępnych ofert w raporcie, ${r?.tracked ?? '?'} w kanałach śledzonych podmiotów. Dopasowano do produktów z bazy: ${r?.matched ?? 0}${r?.no_price ? ` (bez cennika na ten dzień: ${r.no_price})` : ''}, bez dopasowania: ${r?.unmatched ?? 0}${ex ? ` – np. ${ex}` : ''}. Naruszeń: ${r?.violations ?? 0}.` }); load()
     } catch (e) { setMsg({ type: 'error', text: /^n8n odrzucił zadanie \(kod 404\)/.test(e.message) ? 'n8n nie zna adresu „studio-dane” – workflow „Studio – dane rynkowe” nie jest aktywny.' : plError(e.message) }) } finally { setBusy(false) }
   }
   function exportCsv() {
@@ -371,7 +370,7 @@ export default function Prices({ profile }) {
   return (
     <section className="page wide">
       <h1>Ceny u partnerów</h1>
-      <p className="muted lead">Dane z Dealavo (Polska): ceny dostępnych ofert produktów marki Schedline u partnerów wobec Waszej ceny katalogowej, która jest ceną minimalną. Rozbieżność bez kosztu wysyłki; wartość ujemna = oferta poniżej ceny katalogowej (naruszenie).</p>
+      <p className="muted lead">Dane z Dealavo (Polska): ceny dostępnych ofert u partnerów wobec cen z Waszych cenników (Produkty i cenniki): cena minimalna dnia to promocyjna, jeśli jest, inaczej katalogowa. Liczone są tylko produkty z bazy. Rozbieżność bez kosztu wysyłki; wartość ujemna = oferta poniżej ceny katalogowej (naruszenie).</p>
       <div className="panel">
         <div className="prices-head">
           <span>{d.last ? <>Ostatnia aktualizacja Dealavo: <strong>{when(d.last)}</strong></> : <span className="muted">Dane z Dealavo nie były jeszcze pobrane.</span>}</span>
@@ -384,7 +383,7 @@ export default function Prices({ profile }) {
         {msg && <p className={msg.type} role="status">{msg.text}</p>}
         {unmapped > 0 && <p className="hint">{unmapped} z {list.length} podmiotów nie ma jeszcze kanałów z Dealavo – ich oferty nie są liczone. Kliknij podmiot, żeby dodać kanały{d.retailers.length ? '' : ' (podpowiedzi pojawią się po pierwszym pobraniu)'}.</p>}
         <div className="table-wrap"><table className="compact prices-table">
-          <thead><tr><th>Podmiot</th><th className="num-cell">Kanały</th><th className="num-cell">Dostępne oferty</th><th className="num-cell">Produkty</th><th className="num-cell">Średnia rozbieżność</th><th className="num-cell">Mediana</th><th className="num-cell">Poniżej ceny min.</th><th className="num-cell">Bez ceny min.</th></tr></thead>
+          <thead><tr><th>Podmiot</th><th className="num-cell">Kanały</th><th className="num-cell">Dostępne oferty</th><th className="num-cell">Produkty</th><th className="num-cell">Średnia rozbieżność</th><th className="num-cell">Mediana</th><th className="num-cell">Poniżej ceny min.</th><th className="num-cell">Bez ceny min.</th><th className="num-cell" title="Oferty w kanałach podmiotu, których nie udało się dopasować do produktu z bazy (EAN / kod)">Bez dopasowania</th></tr></thead>
           <tbody>{list.map((p, i) => {
             const chs = chOf(p.id), mapped = chs.length > 0, s = mapped ? d.stats[p.id] : null, sep = i > 0 && p.kind !== 'partner' && list[i - 1].kind === 'partner'
             return (
@@ -397,6 +396,7 @@ export default function Prices({ profile }) {
                 <td className={'num-cell' + (s?.median_gap_pct < 0 ? ' neg' : '')}>{pct(s?.median_gap_pct)}</td>
                 <td className="num-cell">{s ? (s.below_min_products > 0 ? <strong className="crit-text">{s.below_min_products}</strong> : 0) : '—'}</td>
                 <td className="num-cell muted">{s?.missing_min_products ?? '—'}</td>
+                <td className="num-cell muted">{s?.unmatched_offers ?? '—'}</td>
               </tr>
             )
           })}</tbody>
@@ -411,7 +411,7 @@ export default function Prices({ profile }) {
           <summary><strong>Uzupełnij historię z Dealavo</strong> <span className="muted small">– wcześniejsze kwartały (admin)</span></summary>
           <h3>Z API Dealavo – kolejne aktualizacje przez n8n (zalecane)</h3>
           <Backfill d={d} onDone={load} />
-          <FileImport d={d} onDone={load} />
+          <p className="muted small file-import">Import z raportu z panelu Dealavo jest wyłączony: weryfikacja liczy się teraz według cenników Studio, a raport z panelu porównywał ceny z „Suggested price”. Historię uzupełniaj przez API powyżej.</p>
         </details>}
       </div>
 
