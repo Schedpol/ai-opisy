@@ -126,7 +126,7 @@ export default function Leads({ profile }) {
       const r = await runJob('lead_research', { country: cc, country_name: country[1], region: country[2], segment, brand, count, exclude_domains: leads.map(l => l.domain).filter(Boolean) }, { url: LEADS_URL, timeoutSec: 300 })
       const SK = { excluded: 'już w CRM lub Studio', duplicate: 'powtórzone', no_website: 'bez adresu strony', google_link: 'link Google zamiast strony firmy', no_name: 'bez nazwy' }
       const why = Object.entries(r.skip || {}).filter(([, v]) => v > 0).map(([k, v]) => `${SK[k] || k}: ${v}`).join(', ')
-      setMsg({ type: r.saved ? 'ok' : 'hint', text: `Research: AI zaproponowało ${r.found} firm, ${r.unique} nowych, ${r.reachable} z działającą stroną. Dodano do kwalifikacji: ${r.saved}.${why ? ` Odpadły – ${why}.` : ''}${!r.unique && r.sample_keys?.length ? ` (pola w odpowiedzi AI: ${r.sample_keys.join(', ')})` : ''}` })
+      setMsg({ type: r.saved ? 'ok' : 'hint', text: `Research: AI zaproponowało ${r.found} firm, ${r.unique} nowych${r.from_search ? ` (w tym ${r.from_search} z adresem ustalonym z wyników wyszukiwania)` : ''}, ${r.reachable} z działającą stroną. Dodano do kwalifikacji: ${r.saved}.${why ? ` Odpadły – ${why}.` : ''}${!r.unique ? ` Stron w wynikach wyszukiwania: ${r.search_pages ?? 0}. Przykład odpowiedzi AI: ${r.sample || '—'}` : ''}` })
       setStage('nowa'); load()
     } catch (e) { setMsg({ type: 'error', text: /kod 404/.test(e.message) ? 'n8n nie zna adresu „studio-pozyskiwanie” – workflow „Studio – pozyskiwanie” nie jest aktywny.' : plError(e.message) }) } finally { setBusy(false) }
   }
