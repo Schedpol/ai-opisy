@@ -731,3 +731,7 @@ tr.current-list td { background: #F3F8F5; }
 .cat-list { list-style: none; padding: 0; margin: 6px 0 16px; display: flex; flex-direction: column; gap: 4px; }
 .cat-list li { display: flex; justify-content: space-between; border-bottom: 1px solid #EEF1F5; padding: 4px 0; }
 @media (max-width: 1000px) { .cat-grid { grid-template-columns: 1fr; } }
+.disc-filter { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 4px 0 12px; padding: 10px 12px; background: #F7F9FC; border-radius: 8px; }
+.disc-filter label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
+.disc-input { display: inline-flex; align-items: center; gap: 4px; }
+.disc-input input { width: 76px; padding: 6px 8px; text-align: right; }
