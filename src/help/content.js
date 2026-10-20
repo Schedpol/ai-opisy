@@ -119,6 +119,10 @@ Kroki 1–4 przygotowuje się raz na model, kategorię lub rynek; potem kolejne 
 
 // Pomoc kontekstowa: krótko, co robić na danym ekranie + link do właściwej części instrukcji
 export const SCREEN_HELP = [
+  { path: '/pozyskiwanie', title: 'Pozyskiwanie klientów', section: 'role', md: `- **Research (AI):** wybierz kraj, segment (lista w CRM EXPORT) i markę → „Szukaj nowych firm”. AI szuka w internecie, pomija firmy z CRM EXPORT i ze Studio, sprawdza, czy strony działają. Każda firma ma źródło.
+- **Kwalifikacja:** w karcie firmy „Oceń stronę (AI)” – czyta stronę i Impressum, proponuje potencjał A/B/C, model współpracy, analizę i argumentację. Sprawdź, popraw i kliknij „Zatwierdź” albo „Odrzuć” z powodem. Bez źródła nie da się zatwierdzić.
+- **Przekazanie:** „Przekaż do ClickUp” tworzy zadanie w CRM EXPORT → Klienci Export (lista wg segmentu) z polami Kraj, Region, Marka, Język, WWW, NIP, Potencjał, Model, Analiza i Argumentacja. Duplikaty z CRM są blokowane.
+- **RODO:** w Studio tylko dane firm; osoby kontaktowe prowadzicie w ClickUp.` },
   { path: '/ceny', title: 'Ceny u partnerów (Dealavo)', section: 'role', md: `- Ranking partnerów: średnia i mediana rozbieżności ceny (dostępne oferty, bez wysyłki; ujemna = taniej) oraz liczba produktów poniżej ceny minimalnej.
 - **Podmioty i kanały:** kliknij podmiot, żeby zmienić jego nazwę i typ oraz dodać kanały – każdy z Twoją etykietą (np. „Allegro PL”, „Castorama”) i nazwą sprzedawcy w Dealavo. Wskaźniki podmiotu to suma kanałów; w szczegółach widać je też per kanał. Jedna nazwa z Dealavo może należeć tylko do jednego podmiotu.
 - **Pobieranie:** automatycznie codziennie o 7:00, a na żądanie przyciskiem **Pobierz z Dealavo** (admin).

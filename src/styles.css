@@ -735,3 +735,14 @@ tr.current-list td { background: #F3F8F5; }
 .disc-filter label { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; }
 .disc-input { display: inline-flex; align-items: center; gap: 4px; }
 .disc-input input { width: 76px; padding: 6px 8px; text-align: right; }
+/* Pozyskiwanie klientów */
+.lead-scope { align-items: flex-end; }
+.lead-funnel { display: flex; gap: 14px; margin-left: auto; color: var(--ink-soft); }
+.lead-card .ai-box { background: #F7F9FC; border-radius: 8px; padding: 10px 14px; margin: 10px 0; }
+.lead-card .ai-box h3 { margin: 0 0 6px; font-size: 15px; }
+.lead-card .ai-box p { margin: 3px 0; }
+.lead-form { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin-bottom: 8px; }
+.block-label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; margin: 8px 0; }
+.block-label textarea { font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
+.tag.pot-A { background: #E3F2EA; color: #1F5E41; } .tag.pot-B { background: #EAF0FA; color: #24477F; } .tag.pot-C { background: #F2F4F8; color: var(--ink-soft); }
+.lead-add { margin-top: 12px; }
