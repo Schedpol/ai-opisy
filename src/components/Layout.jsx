@@ -66,6 +66,11 @@ export default function Layout({ profile }) {
             ))}
           </nav>
         )}
+        {cur?.menu && (
+          <nav aria-label={cur.name} className="sub-nav">
+            <div className="nav-group">{cur.menu.map(n => <NavLink key={n.to} to={n.to} end={!!n.end} className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>{n.label}</NavLink>)}</div>
+          </nav>
+        )}
         {admin && (
           <nav aria-label="Administracja" className="nav-group admin-nav">
             <span className="nav-group-label">Administracja</span>
