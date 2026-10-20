@@ -265,10 +265,8 @@ function Backfill({ d, onDone }) {
 }
 
 // Rozbieżności per kategoria z ostatniej aktualizacji (oferty bieżące × kategorie produktów z bazy)
-function CategoryNow({ d, disc }) {
+function CategoryNowTable({ d, disc, partner, open, setOpen }) {
   const [rows, setRows] = useState(null)
-  const [partner, setPartner] = useState('')
-  const [open, setOpen] = useState('')
   useEffect(() => { fetchAll('dealavo_offers', 'partner_id, product_code, gap_pct, below_min, available').then(setRows).catch(() => setRows([])) }, [d.last])
   if (!rows) return <DrainLoader />
   const pc = d.prodCat || {}
@@ -282,12 +280,12 @@ function CategoryNow({ d, disc }) {
   const sel = table.find(t => t.c === open)
   const byPartner = sel ? [...sel.list.reduce((m, o) => (m.get(o.partner_id) || m.set(o.partner_id, []).get(o.partner_id)).push(o) && m, new Map()).entries()].map(([pid, list]) => ({ pid, ...agg(list) })).sort((a, b) => b.pctBelow - a.pctBelow) : []
   if (!rows.length) return <p className="muted">Brak bieżących ofert – pobierz dane z Dealavo.</p>
+  const priced = rows.filter(o => o.gap_pct !== null && o.gap_pct !== undefined)
+  if (!priced.length) return <p className="hint">Żadna z {rows.length} bieżących ofert (aktualizacja z {when(d.last)}) nie ma ceny minimalnej – w bazie nie ma cennika obowiązującego w dniu {dayOf(d.last)} dla tych produktów. Sprawdź w <a href="#/ceny/cenniki">Produkty i cenniki → Cena na dzień</a>, czy na ten dzień obowiązuje cennik (np. Q4 z okresem 01.10–31.12.2026). Po poprawie kliknij „Pobierz z Dealavo”.</p>
   return (
     <>
-      <div className="row-actions">
-        <label className="inline-label">Podmiot<select value={partner} onChange={e => { setPartner(e.target.value); setOpen('') }}><option value="">wszyscy</option>{d.partners.filter(p => p.active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-        <span className="muted small">Ostatnia aktualizacja: {when(d.last)} · rozbieżność względem ceny minimalnej dnia · kliknij kategorię, żeby zobaczyć podział na partnerów</span>
-      </div>
+      <p className="muted small">Ostatnia aktualizacja: {when(d.last)} · rozbieżność względem ceny minimalnej dnia · kliknij kategorię, żeby zobaczyć podział na podmioty</p>
+      {rows.length - priced.length > 0 && <p className="muted small">{rows.length - priced.length} z {rows.length} ofert nie ma ceny minimalnej na dzień {dayOf(d.last)} (produkt bez pozycji w obowiązującym cenniku) – nie są ujęte w tabeli.</p>}
       <div className="table-wrap"><table className="compact prices-table">
         <thead><tr><th>Kategoria</th><th className="num-cell">Oferty</th><th className="num-cell">Produkty</th><th className="num-cell">Średnia rozbieżność</th><th className="num-cell">Mediana</th><th className="num-cell">{disc > 0 ? `Ofert z obniżką > ${disc}%` : 'Ofert poniżej ceny'}</th><th className="num-cell">Produkty poniżej</th></tr></thead>
         <tbody>{table.map(t => (
@@ -306,6 +304,87 @@ function CategoryNow({ d, disc }) {
           <tbody>{byPartner.map(t => <tr key={t.pid}><td>{name(t.pid)}</td><td className="num-cell">{t.offers}</td><td className={'num-cell' + (t.avg < 0 ? ' neg' : '')}>{r1(t.avg)}</td><td className={'num-cell' + (t.med < 0 ? ' neg' : '')}>{r1(t.med)}</td><td className="num-cell">{t.pctBelow >= 0.05 ? <strong className="crit-text">{t.pctBelow.toLocaleString('pl-PL', { maximumFractionDigits: 1 })}%</strong> : '0%'}</td><td className="num-cell">{t.belowProducts}</td></tr>)}</tbody>
         </table></div>
       </>}
+    </>
+  )
+}
+
+// Rozbieżności per kategoria za okres – z wskaźników zapisanych przy każdym pobraniu (podmiot × kategoria)
+const dayKey = iso => iso.replace(/-/g, '_')
+function CategoryRangeTable({ d, disc, partner, open, setOpen, from, to }) {
+  const lo = dayKey(from), hi = dayKey(to)
+  const rows = (d.catStats || []).filter(x => x.update_time.slice(0, 10) >= lo && x.update_time.slice(0, 10) <= hi && x.offers > 0 && (!partner || x.partner_id === partner))
+  const updates = new Set(rows.map(x => x.update_time)).size
+  if (!updates) return <p className="muted">Brak pobrań w okresie {from.split('-').reverse().join('.')} – {to.split('-').reverse().join('.')}. Uzupełnij historię (Historia kwartalna → Uzupełnij historię) albo wybierz inny okres.</p>
+  const legacy = disc > 0 && rows.some(x => !x.below_pcts && x.below_min_products > 0)
+  const nBelow = x => disc > 0 ? (x.below_pcts || []).filter(v => Number(v) > disc).length : Number(x.below_min_products || 0)
+  const agg = list => {
+    const offers = list.reduce((s2, x) => s2 + x.offers, 0), products = list.reduce((s2, x) => s2 + Number(x.products || 0), 0)
+    const wg = list.filter(x => x.avg_gap_pct !== null), wsum = wg.reduce((s2, x) => s2 + x.offers, 0)
+    const below = list.reduce((s2, x) => s2 + nBelow(x), 0), upd = new Set(list.map(x => x.update_time)).size
+    return { upd, offersPer: offers / Math.max(1, upd), avg: wsum ? wg.reduce((s2, x) => s2 + Number(x.avg_gap_pct) * x.offers, 0) / wsum : null, pctBelow: products ? 100 * below / products : 0, belowPer: below / Math.max(1, updates) }
+  }
+  const groups = new Map(); for (const x of rows) (groups.get(x.category) || groups.set(x.category, []).get(x.category)).push(x)
+  const table = [...groups.entries()].map(([c, list]) => ({ c, list, ...agg(list) })).sort((a, b) => b.belowPer - a.belowPer || b.offersPer - a.offersPer)
+  const sel = table.find(t => t.c === open)
+  const byPartner = sel ? [...sel.list.reduce((m, x) => (m.get(x.partner_id) || m.set(x.partner_id, []).get(x.partner_id)).push(x) && m, new Map()).entries()].map(([pid, list]) => ({ pid, ...agg(list) })).sort((a, b) => b.belowPer - a.belowPer) : []
+  const f1 = x => x.toLocaleString('pl-PL', { maximumFractionDigits: 1 })
+  const name = id => d.partners.find(p => p.id === id)?.name || '—'
+  const head = <tr><th className="num-cell">Pobrań</th><th className="num-cell">Śr. ofert na pobranie</th><th className="num-cell">Średnia rozbieżność</th><th className="num-cell">% produktów poniżej{disc > 0 ? ` (> ${disc}%)` : ''}</th><th className="num-cell">Produkty poniżej – średnio na pobranie</th></tr>
+  const cells = t => <><td className="num-cell">{t.upd}</td><td className="num-cell">{f1(t.offersPer)}</td><td className={'num-cell' + (t.avg < 0 ? ' neg' : '')}>{t.avg === null ? '—' : pct(Math.round(t.avg * 10) / 10)}</td>
+    <td className="num-cell">{t.pctBelow >= 0.05 ? <strong className="crit-text">{f1(t.pctBelow)}%</strong> : '0%'}</td><td className="num-cell">{t.belowPer >= 0.05 ? <strong className="crit-text">{f1(t.belowPer)}</strong> : 0}</td></>
+  return (
+    <>
+      <p className="muted small">{updates} {updates === 1 ? 'pobranie' : (updates % 10 >= 2 && updates % 10 <= 4 && (updates % 100 < 10 || updates % 100 >= 20)) ? 'pobrania' : 'pobrań'} w okresie · średnia rozbieżność ważona liczbą ofert · kliknij kategorię, żeby zobaczyć podział na podmioty</p>
+      {legacy && <p className="hint small">Część pobrań w tym okresie była liczona przed zapisywaniem obniżek per produkt – próg {disc}% nie obejmie ich poprawnie. Przelicz kwartał.</p>}
+      <div className="table-wrap"><table className="compact prices-table">
+        <thead><tr><th>Kategoria</th>{head.props.children}</tr></thead>
+        <tbody>{table.map(t => <tr key={t.c} className={open === t.c ? 'sel' : ''} onClick={() => setOpen(open === t.c ? '' : t.c)}><td>{t.c}</td>{cells(t)}</tr>)}</tbody>
+      </table></div>
+      {sel && <>
+        <h3>{sel.c} – podział na podmioty</h3>
+        <div className="table-wrap"><table className="compact">
+          <thead><tr><th>Podmiot</th>{head.props.children}</tr></thead>
+          <tbody>{byPartner.map(t => <tr key={t.pid}><td>{name(t.pid)}</td>{cells(t)}</tr>)}</tbody>
+        </table></div>
+      </>}
+    </>
+  )
+}
+
+const isoDay = t => `${t.slice(0, 4)}-${t.slice(5, 7)}-${t.slice(8, 10)}`
+const addDays = (iso, n) => { const x = new Date(iso + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10) }
+function CategoryNow({ d, disc }) {
+  const [partner, setPartner] = useState('')
+  const [open, setOpen] = useState('')
+  const [mode, setMode] = useState('now')
+  const lastDay = d.last ? isoDay(d.last) : new Date().toISOString().slice(0, 10)
+  const [range, setRange] = useState({ from: addDays(lastDay, -29), to: lastDay })
+  const years = [...new Set((d.catStats || []).map(x => x.update_time.slice(0, 4)))].sort().reverse()
+  const quarters = years.flatMap(y => [4, 3, 2, 1].map(q => `${y}-Q${q}`)).filter(q => (d.catStats || []).some(x => quarterOf(x.update_time) === q))
+  const preset = v => {
+    setMode(v); setOpen('')
+    if (v === '7') setRange({ from: addDays(lastDay, -6), to: lastDay })
+    else if (v === '30') setRange({ from: addDays(lastDay, -29), to: lastDay })
+    else if (/^\d{4}-Q\d$/.test(v)) { const y = v.slice(0, 4), n = Number(v.slice(6)), m0 = (n - 1) * 3 + 1; setRange({ from: `${y}-${String(m0).padStart(2, '0')}-01`, to: addDays(n === 4 ? `${Number(y) + 1}-01-01` : `${y}-${String(m0 + 3).padStart(2, '0')}-01`, -1) }) }
+  }
+  return (
+    <>
+      <div className="row-actions">
+        <label className="inline-label">Okres<select value={mode} onChange={e => preset(e.target.value)}>
+          <option value="now">ostatnie pobranie ({dayOf(d.last)})</option>
+          <option value="7">ostatnie 7 dni</option><option value="30">ostatnie 30 dni</option>
+          {quarters.map(q => <option key={q} value={q}>{q.replace('-', ' ')}</option>)}
+          <option value="custom">własny zakres…</option>
+        </select></label>
+        {mode !== 'now' && <>
+          <label className="inline-label">od<input type="date" value={range.from} onChange={e => { setMode('custom'); setRange({ ...range, from: e.target.value }) }} /></label>
+          <label className="inline-label">do<input type="date" value={range.to} onChange={e => { setMode('custom'); setRange({ ...range, to: e.target.value }) }} /></label>
+        </>}
+        <label className="inline-label">Podmiot<select value={partner} onChange={e => { setPartner(e.target.value); setOpen('') }}><option value="">wszyscy</option>{d.partners.filter(p => p.active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+      </div>
+      {mode === 'now'
+        ? <CategoryNowTable d={d} disc={disc} partner={partner} open={open} setOpen={setOpen} />
+        : range.from && range.to && range.from <= range.to ? <CategoryRangeTable d={d} disc={disc} partner={partner} open={open} setOpen={setOpen} from={range.from} to={range.to} /> : <p className="hint small">Ustaw poprawny zakres dat.</p>}
     </>
   )
 }
@@ -392,7 +471,7 @@ export default function Prices({ profile }) {
       ])
       if (p.error) throw p.error
       const vi = await fetchAll('dealavo_violations', 'partner_id, quarter, max_below_pct, product_id').catch(() => null)
-      const cs = await fetchAll('dealavo_cat_stats', 'update_time, partner_id, category, offers, avg_gap_pct, below_min_products, below_pcts').catch(() => [])
+      const cs = await fetchAll('dealavo_cat_stats', 'update_time, partner_id, category, offers, products, avg_gap_pct, below_min_products, below_pcts').catch(() => [])
       const pc = await fetchAll('pr_products', 'code, category').catch(() => [])
       const ao = await fetchAll('dealavo_offers', 'partner_id, product_code, gap_pct, below_min, available').catch(() => [])
       const vf = await supabase.from('dealavo_settings').select('value').eq('key', 'valid_from').maybeSingle()
