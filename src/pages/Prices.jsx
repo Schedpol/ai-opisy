@@ -208,7 +208,7 @@ function Backfill({ d, onDone }) {
   const changeQ = v => { setQ(v); const s0 = qStart(v); setFrom(vf && vf > s0 ? vf : s0) }
   async function start(rebuild) {
     const fromKey = from.replace(/-/g, '_')
-    if (rebuild && !confirm(`Przeliczyć ${q.replace('-', ' ')} od ${from.split('-').reverse().join('.')}?\n\nUsunie wszystkie wskaźniki i rejestr naruszeń z tego kwartału, a potem pobierze ponownie dni od tej daty (ok. 1 min na dzień). Data zostanie zapisana jako początek ważnych pomiarów.`)) return
+    if (rebuild && !confirm(`Przeliczyć ${q.replace('-', ' ')} od ${from.split('-').reverse().join('.')}?\n\nUsunie wszystkie wskaźniki i rejestr naruszeń z tego kwartału, a potem pobierze ponownie dni od tej daty (ok. 1 min na dzień). Jeśli to wcześniejsza data niż obecny początek pomiarów, zostanie zapisana jako nowy początek.`)) return
     stop.current = false
     let targets = [], done = 0, skipped = 0, errors = [], ran = 0
     const t0 = Date.now()
@@ -219,7 +219,7 @@ function Backfill({ d, onDone }) {
         const [lo, hi] = qRange(q)
         const a1 = await supabase.from('dealavo_stats').delete().gte('update_time', lo).lt('update_time', hi); if (a1.error) throw a1.error
         const a2 = await supabase.from('dealavo_violations').delete().eq('quarter', q); if (a2.error) throw a2.error
-        const a3 = await supabase.from('dealavo_settings').upsert({ key: 'valid_from', value: fromKey, updated_at: new Date().toISOString() }); if (a3.error) throw a3.error
+        if (!d.validFrom || fromKey < d.validFrom) { const a3 = await supabase.from('dealavo_settings').upsert({ key: 'valid_from', value: fromKey, updated_at: new Date().toISOString() }); if (a3.error) throw a3.error }   // data początku pomiarów może się tylko cofać
       }
       setSt({ running: true, text: 'Pobieranie listy dni z Dealavo…' })
       targets = (await job({ backfill: q, cadence, from: fromKey, list_only: true })).targets || []
@@ -321,7 +321,20 @@ function QuarterHistory({ d, onPick, disc = 0 }) {
   const Q = [1, 2, 3, 4].map(n => `${year}-Q${n}`)
   const src = cat ? (d.catStats || []).filter(x => x.category === cat) : (d.allStats || [])
   const viol = {}; for (const v of d.vcount || []) if (Number(v.max_below_pct || 0) > tol && (!cat || (d.prodCat || {})[v.product_id] === cat)) viol[`${v.partner_id}|${v.quarter}`] = (viol[`${v.partner_id}|${v.quarter}`] || 0) + 1
-  const daily = {}; for (const x of src) { if (!(x.offers > 0)) continue; const k = `${x.partner_id}|${quarterOf(x.update_time)}`; (daily[k] = daily[k] || []).push(Number(x.below_min_products || 0)) }
+  // „Średnio na pobranie” z progiem obniżki: liczba produktów z obniżką > progu w każdym pobraniu (z list obniżek per kategoria)
+  const overByUpd = {}, legacy = new Set()
+  if (disc > 0) for (const x of d.catStats || []) {
+    if (cat && x.category !== cat) continue
+    const k = `${x.partner_id}|${x.update_time}`
+    if (x.below_pcts) overByUpd[k] = (overByUpd[k] || 0) + x.below_pcts.filter(v => Number(v) > disc).length
+    else if (x.below_min_products > 0) legacy.add(quarterOf(x.update_time))
+  }
+  const daily = {}; for (const x of src) {
+    if (!(x.offers > 0)) continue
+    const k = `${x.partner_id}|${quarterOf(x.update_time)}`
+    const n = disc > 0 ? (overByUpd[`${x.partner_id}|${x.update_time}`] || 0) : Number(x.below_min_products || 0)
+    ;(daily[k] = daily[k] || []).push(n)
+  }
   const gap = {}, runs = {}
   for (const x of src) { if (!(x.offers > 0)) continue; const k = `${x.partner_id}|${quarterOf(x.update_time)}`; (gap[k] = gap[k] || []).push(Number(x.avg_gap_pct || 0)) }
   for (const x of d.allStats || []) { const k = quarterOf(x.update_time); runs[k] = runs[k] || new Set(); runs[k].add(x.update_time) }
@@ -344,8 +357,8 @@ function QuarterHistory({ d, onPick, disc = 0 }) {
           <button className={metric === 'rozbieznosc' ? 'on' : ''} onClick={() => setMetric('rozbieznosc')}>Średnia rozbieżność</button>
         </div>
       </div>
-      {metric === 'dziennie' && disc > 0 && <p className="hint small">Próg obniżki ({disc}%) nie dotyczy tego widoku – liczby „średnio na pobranie” są zapisywane przy każdym pobraniu bez progu. Z progiem: „choć raz w kwartale”.</p>}
-      <p className="muted small">{metric === 'dziennie' ? 'Ile produktów średnio w jednym pomiarze było poniżej ceny minimalnej – porównywalne między kwartałami niezależnie od liczby pobrań.' : metric === 'naruszenia' ? `Liczba różnych produktów, które w kwartale choć raz były poniżej ceny minimalnej${tol ? ` o więcej niż ${tol}%` : ''}. Rośnie z liczbą pobrań – do porównań między kwartałami użyj „średnio na pobranie”.` : 'Średnia z rozbieżności zmierzonych w pobraniach w danym kwartale.'} Dane od {dayOf(first)}.{d.validFrom ? ` Pomiary ważne od ${dayOf(d.validFrom + '_00_00')} (cenniki Studio).` : ''}</p>
+      {metric === 'dziennie' && disc > 0 && Q.some(q => legacy.has(q)) && <p className="hint small">Część pobrań w {Q.filter(q => legacy.has(q)).map(q => q.slice(5)).join(', ')} była liczona przed zapisywaniem obniżek per produkt – próg nie obejmie ich poprawnie. Przelicz te kwartały („Uzupełnij historię” → „Przelicz kwartał od tego dnia”).</p>}
+      <p className="muted small">{metric === 'dziennie' ? `Ile produktów średnio w jednym pomiarze było poniżej ceny minimalnej${disc > 0 ? ` z obniżką większą niż ${disc}%` : ''} – porównywalne między kwartałami niezależnie od liczby pobrań.` : metric === 'naruszenia' ? `Liczba różnych produktów, które w kwartale choć raz były poniżej ceny minimalnej${tol ? ` o więcej niż ${tol}%` : ''}. Rośnie z liczbą pobrań – do porównań między kwartałami użyj „średnio na pobranie”.` : 'Średnia z rozbieżności zmierzonych w pobraniach w danym kwartale.'} Dane od {dayOf(first)}.{d.validFrom ? ` Pomiary ważne od ${dayOf(d.validFrom + '_00_00')} (cenniki Studio).` : ''}</p>
       <div className="table-wrap"><table className="compact prices-table">
         <thead><tr><th>Podmiot</th>{Q.map(q => <th key={q} className="num-cell">{q.slice(5)}<span className="muted small"> · {runs[q]?.size || 0} pobr.</span></th>)}</tr></thead>
         <tbody>{list.map(p => <tr key={p.id} onClick={() => onPick(p.id)}><td>{p.name}{p.kind !== 'partner' && <span className="tag">{KIND[p.kind]}</span>}</td>{Q.map(q => <td key={q} className="num-cell">{cell(p, q)}</td>)}</tr>)}</tbody>
@@ -379,7 +392,7 @@ export default function Prices({ profile }) {
       ])
       if (p.error) throw p.error
       const vi = await fetchAll('dealavo_violations', 'partner_id, quarter, max_below_pct, product_id').catch(() => null)
-      const cs = await fetchAll('dealavo_cat_stats', 'update_time, partner_id, category, offers, avg_gap_pct, below_min_products').catch(() => [])
+      const cs = await fetchAll('dealavo_cat_stats', 'update_time, partner_id, category, offers, avg_gap_pct, below_min_products, below_pcts').catch(() => [])
       const pc = await fetchAll('pr_products', 'code, category').catch(() => [])
       const ao = await fetchAll('dealavo_offers', 'partner_id, product_code, gap_pct, below_min, available').catch(() => [])
       const vf = await supabase.from('dealavo_settings').select('value').eq('key', 'valid_from').maybeSingle()
