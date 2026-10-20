@@ -6,6 +6,7 @@ const RX = {
   ean: /(ean|kod kreskowy|gtin)/i,
   name: /^(nazwa|opis|produkt|towar|name|product name|description)/i,
   brand: /^(brand|marka)$/i,
+  category: /^(kategoria|category|grupa|grupa towarowa)/i,
   promo: /(promo|promotion)/i,
   catalogue: /(katalog|cena kat|detal|sugerowan|cena brutto|cena netto|^cena|price|rrp|msrp)/i,
 }
@@ -25,8 +26,8 @@ export function readSheet(buffer) {
 export function guessMapping(headers) {
   const used = new Set(), pick = rx => { const i = headers.findIndex((h, k) => !used.has(k) && rx.test(h)); if (i >= 0) used.add(i); return i }
   // kolejność ma znaczenie: najpierw kolumny jednoznaczne, cena katalogowa na końcu (najszerszy wzorzec)
-  const ean = pick(RX.ean), brand = pick(RX.brand), promo = pick(RX.promo), code = pick(RX.code), name = pick(RX.name), catalogue = pick(RX.catalogue)
-  return { code, ean, name, catalogue, promo, brand }
+  const ean = pick(RX.ean), brand = pick(RX.brand), category = pick(RX.category), promo = pick(RX.promo), code = pick(RX.code), name = pick(RX.name), catalogue = pick(RX.catalogue)
+  return { code, ean, name, catalogue, promo, brand, category }
 }
 
 // Brutto/netto z nazwy kolumny ceny (np. „Sale Price (gross)”, „Cena netto”); null = nie wiadomo
@@ -58,7 +59,7 @@ export function buildItems(rows, m, { gross = true, vat = 23, brand = null, minP
     if (seen.has(key)) { issues.duplicates.push(key); continue }
     seen.add(key)
     if (ean && !/^\d{8,14}$/.test(ean)) issues.badEan++
-    const item = { code: key, ean, name: m.name >= 0 ? asText(r[m.name]) || null : null, catalogue: r2(cat * k), promo: promo ? r2(promo * k) : null }
+    const item = { code: key, ean, category: m.category >= 0 ? asText(r[m.category]) || null : null, name: m.name >= 0 ? asText(r[m.name]) || null : null, catalogue: r2(cat * k), promo: promo ? r2(promo * k) : null }
     if (item.promo && item.promo >= item.catalogue) issues.promoAbove++
     items.push(item)
   }

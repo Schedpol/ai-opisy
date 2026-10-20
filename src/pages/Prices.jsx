@@ -262,17 +262,66 @@ function Backfill({ d, onDone }) {
   )
 }
 
+// Rozbieżności per kategoria z ostatniej aktualizacji (oferty bieżące × kategorie produktów z bazy)
+function CategoryNow({ d }) {
+  const [rows, setRows] = useState(null)
+  const [partner, setPartner] = useState('')
+  const [open, setOpen] = useState('')
+  useEffect(() => { fetchAll('dealavo_offers', 'partner_id, product_code, gap_pct, below_min, available').then(setRows).catch(() => setRows([])) }, [d.last])
+  if (!rows) return <DrainLoader />
+  const pc = d.prodCat || {}
+  const av = rows.filter(o => o.available && o.gap_pct !== null && (!partner || o.partner_id === partner))
+  const med = a => { if (!a.length) return null; const x = [...a].sort((p, q) => p - q), m = Math.floor(x.length / 2); return x.length % 2 ? x[m] : (x[m - 1] + x[m]) / 2 }
+  const agg = list => { const g = list.map(o => Number(o.gap_pct)); const below = list.filter(o => o.below_min); return { offers: list.length, products: new Set(list.map(o => o.product_code)).size, avg: g.length ? g.reduce((s2, x) => s2 + x, 0) / g.length : null, med: med(g), pctBelow: list.length ? 100 * below.length / list.length : 0, belowProducts: new Set(below.map(o => o.product_code)).size } }
+  const groups = new Map(); for (const o of av) { const c = pc[o.product_code] || '(bez kategorii)'; (groups.get(c) || groups.set(c, []).get(c)).push(o) }
+  const table = [...groups.entries()].map(([c, list]) => ({ c, ...agg(list), list })).sort((a, b) => b.pctBelow - a.pctBelow || b.offers - a.offers)
+  const r1 = x => x === null ? '—' : pct(Math.round(x * 10) / 10)
+  const name = id => d.partners.find(p => p.id === id)?.name || '—'
+  const sel = table.find(t => t.c === open)
+  const byPartner = sel ? [...sel.list.reduce((m, o) => (m.get(o.partner_id) || m.set(o.partner_id, []).get(o.partner_id)).push(o) && m, new Map()).entries()].map(([pid, list]) => ({ pid, ...agg(list) })).sort((a, b) => b.pctBelow - a.pctBelow) : []
+  if (!rows.length) return <p className="muted">Brak bieżących ofert – pobierz dane z Dealavo.</p>
+  return (
+    <>
+      <div className="row-actions">
+        <label className="inline-label">Podmiot<select value={partner} onChange={e => { setPartner(e.target.value); setOpen('') }}><option value="">wszyscy</option>{d.partners.filter(p => p.active).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+        <span className="muted small">Ostatnia aktualizacja: {when(d.last)} · rozbieżność względem ceny minimalnej dnia · kliknij kategorię, żeby zobaczyć podział na partnerów</span>
+      </div>
+      <div className="table-wrap"><table className="compact prices-table">
+        <thead><tr><th>Kategoria</th><th className="num-cell">Oferty</th><th className="num-cell">Produkty</th><th className="num-cell">Średnia rozbieżność</th><th className="num-cell">Mediana</th><th className="num-cell">Ofert poniżej ceny</th><th className="num-cell">Produkty poniżej</th></tr></thead>
+        <tbody>{table.map(t => (
+          <tr key={t.c} className={open === t.c ? 'sel' : ''} onClick={() => setOpen(open === t.c ? '' : t.c)}>
+            <td>{t.c}</td><td className="num-cell">{t.offers}</td><td className="num-cell">{t.products}</td>
+            <td className={'num-cell' + (t.avg < 0 ? ' neg' : '')}>{r1(t.avg)}</td><td className={'num-cell' + (t.med < 0 ? ' neg' : '')}>{r1(t.med)}</td>
+            <td className="num-cell">{t.pctBelow >= 0.05 ? <strong className="crit-text">{t.pctBelow.toLocaleString('pl-PL', { maximumFractionDigits: 1 })}%</strong> : '0%'}</td>
+            <td className="num-cell">{t.belowProducts || 0}</td>
+          </tr>
+        ))}</tbody>
+      </table></div>
+      {sel && <>
+        <h3>{sel.c} – podział na podmioty</h3>
+        <div className="table-wrap"><table className="compact">
+          <thead><tr><th>Podmiot</th><th className="num-cell">Oferty</th><th className="num-cell">Średnia rozbieżność</th><th className="num-cell">Mediana</th><th className="num-cell">Ofert poniżej ceny</th><th className="num-cell">Produkty poniżej</th></tr></thead>
+          <tbody>{byPartner.map(t => <tr key={t.pid}><td>{name(t.pid)}</td><td className="num-cell">{t.offers}</td><td className={'num-cell' + (t.avg < 0 ? ' neg' : '')}>{r1(t.avg)}</td><td className={'num-cell' + (t.med < 0 ? ' neg' : '')}>{r1(t.med)}</td><td className="num-cell">{t.pctBelow >= 0.05 ? <strong className="crit-text">{t.pctBelow.toLocaleString('pl-PL', { maximumFractionDigits: 1 })}%</strong> : '0%'}</td><td className="num-cell">{t.belowProducts}</td></tr>)}</tbody>
+        </table></div>
+      </>}
+    </>
+  )
+}
+
 function QuarterHistory({ d, onPick }) {
   const years = [...new Set([...(d.allStats || []).map(x => quarterOf(x.update_time)), ...(d.vcount || []).map(x => x.quarter)].filter(Boolean).map(q => q.slice(0, 4)))].sort().reverse()
   const [year, setYear] = useState(years[0] || String(new Date().getFullYear()))
   const [metric, setMetric] = useState('dziennie')
   const [tol, setTol] = useState(0)
+  const [cat, setCat] = useState('')
+  const catList = [...new Set((d.catStats || []).map(x => x.category))].sort((a, b) => a.localeCompare(b, 'pl'))
   if (!years.length) return <p className="muted">Historia pojawi się po pierwszych pobraniach – od teraz codziennie o 7:00.</p>
   const Q = [1, 2, 3, 4].map(n => `${year}-Q${n}`)
-  const viol = {}; for (const v of d.vcount || []) if (Number(v.max_below_pct || 0) > tol) viol[`${v.partner_id}|${v.quarter}`] = (viol[`${v.partner_id}|${v.quarter}`] || 0) + 1
-  const daily = {}; for (const x of d.allStats || []) { if (!(x.offers > 0)) continue; const k = `${x.partner_id}|${quarterOf(x.update_time)}`; (daily[k] = daily[k] || []).push(Number(x.below_min_products || 0)) }
+  const src = cat ? (d.catStats || []).filter(x => x.category === cat) : (d.allStats || [])
+  const viol = {}; for (const v of d.vcount || []) if (Number(v.max_below_pct || 0) > tol && (!cat || (d.prodCat || {})[v.product_id] === cat)) viol[`${v.partner_id}|${v.quarter}`] = (viol[`${v.partner_id}|${v.quarter}`] || 0) + 1
+  const daily = {}; for (const x of src) { if (!(x.offers > 0)) continue; const k = `${x.partner_id}|${quarterOf(x.update_time)}`; (daily[k] = daily[k] || []).push(Number(x.below_min_products || 0)) }
   const gap = {}, runs = {}
-  for (const x of d.allStats || []) { if (!(x.offers > 0)) continue; const k = `${x.partner_id}|${quarterOf(x.update_time)}`; (gap[k] = gap[k] || []).push(Number(x.avg_gap_pct || 0)) }
+  for (const x of src) { if (!(x.offers > 0)) continue; const k = `${x.partner_id}|${quarterOf(x.update_time)}`; (gap[k] = gap[k] || []).push(Number(x.avg_gap_pct || 0)) }
   for (const x of d.allStats || []) { const k = quarterOf(x.update_time); runs[k] = runs[k] || new Set(); runs[k].add(x.update_time) }
   const first = (d.allStats || []).reduce((m, x) => !m || x.update_time < m ? x.update_time : m, '')
   const list = d.partners.filter(p => p.active && Q.some(q => viol[`${p.id}|${q}`] || gap[`${p.id}|${q}`]))
@@ -286,6 +335,7 @@ function QuarterHistory({ d, onPick }) {
     <>
       <div className="row-actions">
         <label className="inline-label">Rok<select value={year} onChange={e => setYear(e.target.value)}>{years.map(y => <option key={y}>{y}</option>)}</select></label>
+        <label className="inline-label">Kategoria<select value={cat} onChange={e => setCat(e.target.value)}><option value="">wszystkie</option>{catList.map(c => <option key={c} value={c}>{c}</option>)}</select></label>
         <div className="seg" role="radiogroup">
           <button className={metric === 'dziennie' ? 'on' : ''} onClick={() => setMetric('dziennie')}>Poniżej ceny – średnio na pobranie</button>
           <button className={metric === 'naruszenia' ? 'on' : ''} onClick={() => setMetric('naruszenia')}>Poniżej ceny – choć raz w kwartale</button>
@@ -324,10 +374,12 @@ export default function Prices({ profile }) {
         fetchAll('dealavo_channels', '*').catch(e => { throw new Error(/dealavo_channels/.test(e.message) ? 'Brak tabeli kanałów – uruchom migrację 32_dealavo_kanaly.sql.' : e.message) }),
       ])
       if (p.error) throw p.error
-      const vi = await fetchAll('dealavo_violations', 'partner_id, quarter, max_below_pct').catch(() => null)
+      const vi = await fetchAll('dealavo_violations', 'partner_id, quarter, max_below_pct, product_id').catch(() => null)
+      const cs = await fetchAll('dealavo_cat_stats', 'update_time, partner_id, category, offers, avg_gap_pct, below_min_products').catch(() => [])
+      const pc = await fetchAll('pr_products', 'code, category').catch(() => [])
       const vf = await supabase.from('dealavo_settings').select('value').eq('key', 'valid_from').maybeSingle()
       const last = st.reduce((m, s) => s.update_time > m ? s.update_time : m, '')
-      setD({ validFrom: vf?.data?.value || null, allStats: st, vcount: vi, channels: ch, partners: p.data, stats: Object.fromEntries(st.filter(s => s.update_time === last).map(s => [s.partner_id, s])), last, retailers: rt.sort((a, b) => b.offers - a.offers) })
+      setD({ catStats: cs, prodCat: Object.fromEntries(pc.map(x => [x.code, x.category || '(bez kategorii)'])), validFrom: vf?.data?.value || null, allStats: st, vcount: vi, channels: ch, partners: p.data, stats: Object.fromEntries(st.filter(s => s.update_time === last).map(s => [s.partner_id, s])), last, retailers: rt.sort((a, b) => b.offers - a.offers) })
     } catch (e) { setErr(/migrację 32/.test(e.message) ? e.message : /dealavo_/.test(e.message) ? 'Brak tabel Dealavo – uruchom migrację 31_dealavo.sql.' : plError(e.message)) }
   }
   useEffect(() => { load() }, [])
@@ -402,6 +454,11 @@ export default function Prices({ profile }) {
           })}</tbody>
         </table></div>
         {admin && <div className="row-actions"><input value={np} onChange={e => setNp(e.target.value)} placeholder="Nowy podmiot do śledzenia…" /><button className="btn ghost small-btn" disabled={!np.trim()} onClick={addPartner}>Dodaj podmiot</button></div>}
+      </div>
+
+      <div className="panel">
+        <h2>Rozbieżności według kategorii</h2>
+        <CategoryNow d={d} />
       </div>
 
       <div className="panel">

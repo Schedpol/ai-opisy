@@ -6,7 +6,7 @@ import DrainLoader from '../components/DrainLoader.jsx'
 const zl = v => v === null || v === undefined ? '—' : `${Number(v).toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} zł`
 const dpl = d => d ? d.split('-').reverse().join('.') : '—'
 const today = () => new Date().toISOString().slice(0, 10)
-const FIELDS = [['code', 'Kod produktu (SKU / MPN)'], ['ean', 'EAN'], ['name', 'Nazwa'], ['catalogue', 'Cena katalogowa'], ['promo', 'Cena promocyjna (opcjonalnie)'], ['brand', 'Marka (opcjonalnie – do kontroli)']]
+const FIELDS = [['code', 'Kod produktu (SKU / MPN)'], ['ean', 'EAN'], ['name', 'Nazwa'], ['catalogue', 'Cena katalogowa'], ['promo', 'Cena promocyjna (opcjonalnie)'], ['brand', 'Marka (opcjonalnie – do kontroli)'], ['category', 'Kategoria (opcjonalnie)']]
 
 // Ceny obowiązujące danego dnia dla wszystkich produktów marki (cennik, który zaczął obowiązywać najpóźniej, wygrywa)
 async function pricesOn(lists, day) {
@@ -44,7 +44,7 @@ function Importer({ brand, lists, onDone }) {
       const ids = new Map()
       for (let i = 0; i < items.length; i += 500) {
         setBusy(`Produkty: ${Math.min(i + 500, items.length)} / ${items.length}`)
-        const { data, error } = await supabase.from('pr_products').upsert(items.slice(i, i + 500).map(x => ({ brand_id: brand.id, code: x.code, ean: x.ean, name: x.name })), { onConflict: 'brand_id,code' }).select('id, code')
+        const { data, error } = await supabase.from('pr_products').upsert(items.slice(i, i + 500).map(x => ({ brand_id: brand.id, code: x.code, ean: x.ean, name: x.name, ...(x.category ? { category: x.category, category_source: 'plik' } : {}) })), { onConflict: 'brand_id,code' }).select('id, code')
         if (error) throw error
         for (const p of data) ids.set(p.code, p.id)
       }
@@ -58,6 +58,7 @@ function Importer({ brand, lists, onDone }) {
         setBusy(`Pozycje cennika: ${Math.min(i + 1000, rows.length)} / ${rows.length}`)
         const { error } = await supabase.from('pr_price_items').insert(rows.slice(i, i + 1000)); if (error) throw error
       }
+      await supabase.rpc('pr_apply_categories', { p_brand: brand.id })   // nowe produkty dostają kategorie z reguł
       setBusy(''); setFile(null); setMap(null); setF({ name: '', from: '', to: '', gross: true, vat: 23, minPrice: 1 }); onDone(`Zaimportowano „${f.name.trim()}”: ${rows.length} pozycji (${dpl(f.from)} – ${dpl(f.to)}).`)
     } catch (e) { setBusy(''); setErr(/pr_products|pr_price/.test(e.message) ? 'Brak tabel bazy cenników – uruchom migrację 36_baza_cennikow.sql.' : plError(e.message)) }
   }
@@ -99,6 +100,47 @@ function Importer({ brand, lists, onDone }) {
   )
 }
 
+function Categories({ brand, products, onChanged, setMsg }) {
+  const [rules, setRules] = useState(null)
+  const [nr, setNr] = useState({ pattern: '', category: '' })
+  const load = () => supabase.from('pr_category_rules').select('*').eq('brand_id', brand.id).order('pattern').then(({ data, error }) => error ? setMsg({ type: 'error', text: /pr_category_rules/.test(error.message) ? 'Brak tabeli reguł – uruchom migrację 38_kategorie_produktow.sql.' : plError(error.message) }) : setRules(data))
+  useEffect(() => { load() }, [brand.id])
+  if (!rules) return <DrainLoader />
+  const ruleOf = code => rules.filter(r => code.toUpperCase().startsWith(r.pattern.toUpperCase())).sort((a, b) => b.pattern.length - a.pattern.length)[0]
+  const hits = Object.fromEntries(rules.map(r => [r.id, 0])); for (const p of products) { const r = ruleOf(p.code); if (r) hits[r.id]++ }
+  const cats = [...new Set([...rules.map(r => r.category), ...products.map(p => p.category).filter(Boolean)])].sort((a, b) => a.localeCompare(b, 'pl'))
+  const byCat = cats.map(c => [c, products.filter(p => p.category === c).length]).filter(([, n]) => n)
+  const none = products.filter(p => !p.category)
+  const manual = products.filter(p => p.category_source === 'ręcznie').length
+  async function apply() { const { data, error } = await supabase.rpc('pr_apply_categories', { p_brand: brand.id }); if (error) setMsg({ type: 'error', text: plError(error.message) }); else { setMsg({ type: 'ok', text: `Przypisano kategorie z reguł: zmieniono ${data} produktów.` }); onChanged() } }
+  const save = async (q, ok) => { const { error } = await q; if (error) setMsg({ type: 'error', text: /duplicate/.test(error.message) ? 'Taki prefiks już istnieje.' : plError(error.message) }); else { setMsg(ok ? { type: 'ok', text: ok } : null); load() } }
+  return (
+    <div className="cat-grid">
+      <div>
+        <h3>Reguły: prefiks kodu → kategoria</h3>
+        <p className="muted small">Kod produktu zaczynający się od prefiksu dostaje kategorię; dłuższy prefiks wygrywa (np. „SCP200” przed „SCP”). Po zmianach kliknij „Przypisz kategorie z reguł”. Kategorie ustawione ręcznie lub wczytane z pliku nie są nadpisywane{manual ? ` (ręcznie: ${manual})` : ''}.</p>
+        <datalist id="pr-cats">{cats.map(c => <option key={c} value={c} />)}</datalist>
+        <div className="table-wrap"><table className="compact">
+          <thead><tr><th>Prefiks</th><th>Kategoria</th><th className="num-cell">Produktów</th><th /></tr></thead>
+          <tbody>{rules.map(r => <tr key={r.id}><td className="mono">{r.pattern}</td>
+            <td><input className="inline-input" list="pr-cats" defaultValue={r.category} onBlur={e => e.target.value.trim() && e.target.value.trim() !== r.category && save(supabase.from('pr_category_rules').update({ category: e.target.value.trim() }).eq('id', r.id))} /></td>
+            <td className="num-cell">{hits[r.id]}</td><td><button className="link-dark danger-link small" onClick={() => save(supabase.from('pr_category_rules').delete().eq('id', r.id))}>usuń</button></td></tr>)}
+            <tr className="add-row"><td><input className="inline-input mono" value={nr.pattern} onChange={e => setNr({ ...nr, pattern: e.target.value })} placeholder="np. SDB" /></td>
+              <td><input className="inline-input" list="pr-cats" value={nr.category} onChange={e => setNr({ ...nr, category: e.target.value })} placeholder="Kategoria" /></td><td />
+              <td><button className="btn ghost small-btn" disabled={!nr.pattern.trim() || !nr.category.trim()} onClick={() => { save(supabase.from('pr_category_rules').insert({ brand_id: brand.id, pattern: nr.pattern.trim(), category: nr.category.trim() })); setNr({ pattern: '', category: '' }) }}>Dodaj</button></td></tr>
+          </tbody>
+        </table></div>
+        <div className="row-actions"><button className="btn" onClick={apply}>Przypisz kategorie z reguł</button></div>
+      </div>
+      <div>
+        <h3>Kategorie w bazie</h3>
+        <ul className="cat-list">{byCat.map(([c, n]) => <li key={c}><span>{c}</span><span className="muted">{n}</span></li>)}</ul>
+        {none.length > 0 && <><h3 className="warn-text">Bez kategorii: {none.length}</h3><p className="muted small">{none.slice(0, 30).map(p => p.code).join(', ')}{none.length > 30 ? ' …' : ''}</p></>}
+      </div>
+    </div>
+  )
+}
+
 export default function PriceBase({ profile }) {
   const admin = profile?.role === 'admin'
   const [brands, setBrands] = useState(null)
@@ -120,7 +162,7 @@ export default function PriceBase({ profile }) {
     try {
       const [l, p] = await Promise.all([
         supabase.from('pr_price_lists').select('*').eq('brand_id', brandId).order('valid_from', { ascending: false }),
-        fetchAll('pr_products', 'id, code, ean, name, active', x => x.eq('brand_id', brandId)),
+        fetchAll('pr_products', 'id, code, ean, name, active, category, category_source', x => x.eq('brand_id', brandId)),
       ])
       if (l.error) throw l.error
       setLists(l.data); setProducts(p.sort((a, b) => a.code.localeCompare(b.code, 'pl')))
@@ -142,7 +184,7 @@ export default function PriceBase({ profile }) {
   if (!brands) return <section className="page"><DrainLoader /></section>
   const brand = brands.find(b => b.id === brandId)
   const ql = q.trim().toLowerCase()
-  const shown = products.filter(p => !ql || p.code.toLowerCase().includes(ql) || (p.ean || '').includes(ql) || (p.name || '').toLowerCase().includes(ql))
+  const shown = products.filter(p => !ql || p.code.toLowerCase().includes(ql) || (p.ean || '').includes(ql) || (p.name || '').toLowerCase().includes(ql) || (p.category || '').toLowerCase().includes(ql))
   const active = lists.filter(l => l.valid_from <= day && day <= l.valid_to)
 
   async function addBrand() {
@@ -167,7 +209,7 @@ export default function PriceBase({ profile }) {
         <p className="small">{brand?.name}: <strong>{products.length}</strong> produktów · <strong>{lists.length}</strong> {lists.length === 1 ? 'cennik' : 'cenników'}</p>
         {msg && <p className={msg.type} role="status">{msg.text}</p>}
         <div className="tabs" role="tablist">
-          {[['cenniki', 'Cenniki'], ['produkty', 'Produkty'], ['dzien', 'Cena na dzień']].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'tab on' : 'tab'} onClick={() => setTab(k)}>{l}</button>)}
+          {[['cenniki', 'Cenniki'], ['produkty', 'Produkty'], ['kategorie', 'Kategorie'], ['dzien', 'Cena na dzień']].map(([k, l]) => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'tab on' : 'tab'} onClick={() => setTab(k)}>{l}</button>)}
         </div>
 
         {tab === 'cenniki' && (lists.length === 0 ? <p className="muted">Brak cenników – zaimportuj pierwszy poniżej.</p> : (
@@ -188,15 +230,19 @@ export default function PriceBase({ profile }) {
         ))}
 
         {tab === 'produkty' && <>
-          <div className="filters"><input placeholder="Szukaj: kod, EAN, nazwa…" value={q} onChange={e => setQ(e.target.value)} /><span className="muted small">Cena z dnia {dpl(day)}</span></div>
+          <div className="filters"><input placeholder="Szukaj: kod, EAN, nazwa, kategoria…" value={q} onChange={e => setQ(e.target.value)} /><span className="muted small">Cena z dnia {dpl(day)} · ✎ = kategoria ustawiona ręcznie (reguły jej nie nadpisują)</span></div>
+          <datalist id="pr-cats-all">{[...new Set(products.map(p => p.category).filter(Boolean))].sort().map(c => <option key={c} value={c} />)}</datalist>
           <div className="table-wrap"><table className="compact">
-            <thead><tr><th>Kod</th><th>EAN</th><th>Nazwa</th><th className="num-cell">Katalogowa</th><th className="num-cell">Promocyjna</th><th className="num-cell">Minimalna</th></tr></thead>
+            <thead><tr><th>Kod</th><th>EAN</th><th>Nazwa</th><th>Kategoria</th><th className="num-cell">Katalogowa</th><th className="num-cell">Promocyjna</th><th className="num-cell">Minimalna</th></tr></thead>
             <tbody>{shown.slice(0, 300).map(p => { const pr = onDay?.get(p.id); return (
               <tr key={p.id}><td className="mono">{p.code}</td><td className="mono small">{p.ean || <span className="warn-text">brak</span>}</td><td>{p.name || '—'}</td>
+                <td>{admin ? <input className="inline-input" list="pr-cats-all" defaultValue={p.category || ''} title={p.category_source ? `źródło: ${p.category_source}` : ''} onBlur={e => { const v = e.target.value.trim(); if (v !== (p.category || '')) supabase.from('pr_products').update({ category: v || null, category_source: v ? 'ręcznie' : null }).eq('id', p.id).then(({ error }) => error ? setMsg({ type: 'error', text: plError(error.message) }) : load()) }} /> : (p.category || '—')}{p.category_source === 'ręcznie' && <span className="muted small"> ✎</span>}</td>
                 <td className="num-cell">{zl(pr?.catalogue_price)}</td><td className="num-cell">{zl(pr?.promo_price)}</td><td className="num-cell"><strong>{zl(pr?.min)}</strong></td></tr>) })}</tbody>
           </table></div>
           {shown.length > 300 && <p className="muted small">Pokazano 300 z {shown.length} – zawęź wyszukiwanie.</p>}
         </>}
+
+        {tab === 'kategorie' && brand && <Categories brand={brand} products={products} onChanged={load} setMsg={setMsg} />}
 
         {tab === 'dzien' && <>
           <div className="filters">

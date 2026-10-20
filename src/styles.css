@@ -727,3 +727,7 @@ tr.below-min td { background: #FDF3F2; }
 .price-form { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); margin: 12px 0; }
 .price-map { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); margin: 8px 0 12px; }
 tr.current-list td { background: #F3F8F5; }
+.cat-grid { display: grid; grid-template-columns: minmax(0, 3fr) minmax(220px, 2fr); gap: 24px; }
+.cat-list { list-style: none; padding: 0; margin: 6px 0 16px; display: flex; flex-direction: column; gap: 4px; }
+.cat-list li { display: flex; justify-content: space-between; border-bottom: 1px solid #EEF1F5; padding: 4px 0; }
+@media (max-width: 1000px) { .cat-grid { grid-template-columns: 1fr; } }
