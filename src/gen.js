@@ -68,7 +68,7 @@ async function nextVersion(familyId, channelId, productId) {
 
 async function launch(descId, payload) {
   try {
-    await runJob('generate_description', { ...payload, description_id: descId }, { timeoutSec: 360 })
+    await runJob('generate_description', { ...payload, description_id: descId }, { timeoutSec: 660 })   // ponawianie zapytań do Vertex (3 próby × do 2 min) mieści się w czasie oczekiwania
   } catch (e) {
     await supabase.from('descriptions').update({ status: 'blad', qa: { pass: false, errors: [e.message], warnings: [] } }).eq('id', descId)
     throw e

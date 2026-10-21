@@ -124,9 +124,9 @@ export default function Leads({ profile }) {
     setBusy(true); setMsg(null)
     try {
       const r = await runJob('lead_research', { country: cc, country_name: country[1], region: country[2], segment, brand, count, exclude_domains: leads.map(l => l.domain).filter(Boolean) }, { url: LEADS_URL, timeoutSec: 300 })
-      const SK = { excluded: 'już w CRM lub Studio', duplicate: 'powtórzone', no_website: 'bez adresu strony', google_link: 'link Google zamiast strony firmy', no_name: 'bez nazwy' }
+      const SK = { excluded: 'już w CRM lub Studio', duplicate: 'powtórzone', no_website: 'bez adresu strony', not_in_search: 'domena spoza wyników researchu', directory: 'katalog zamiast firmy', google_link: 'link Google zamiast strony firmy', no_name: 'bez nazwy' }
       const why = Object.entries(r.skip || {}).filter(([, v]) => v > 0).map(([k, v]) => `${SK[k] || k}: ${v}`).join(', ')
-      setMsg({ type: r.saved ? 'ok' : 'hint', text: `Research: AI zaproponowało ${r.found} firm, ${r.unique} nowych${r.from_search ? ` (w tym ${r.from_search} z adresem ustalonym z wyników wyszukiwania)` : ''}, ${r.reachable} z działającą stroną. Dodano do kwalifikacji: ${r.saved}.${why ? ` Odpadły – ${why}.` : ''}${!r.unique ? ` Stron w wynikach wyszukiwania: ${r.search_pages ?? 0}. Przykład odpowiedzi AI: ${r.sample || '—'}` : ''}` })
+      setMsg({ type: r.saved ? 'ok' : 'hint', text: `Research: AI zaproponowało ${r.found} firm, ${r.unique} nowych${r.from_search ? ` (w tym ${r.from_search} z adresem ustalonym z wyników wyszukiwania)` : ''}, ${r.reachable} z działającą stroną. Dodano do kwalifikacji: ${r.saved}.${why ? ` Odpadły – ${why}.` : ''}${r.grounded === false ? ' Uwaga: wyszukiwanie Google nie zwróciło wyników – firmy pochodzą z wiedzy modelu, a jedynym potwierdzeniem jest działająca strona; sprawdzaj je dokładniej przy kwalifikacji.' : ''}${!r.unique ? ` Przykład odpowiedzi AI: ${r.sample || '—'} | po uporządkowaniu: ${r.sample_order || '—'}` : ''}` })
       setStage('nowa'); load()
     } catch (e) { setMsg({ type: 'error', text: /kod 404/.test(e.message) ? 'n8n nie zna adresu „studio-pozyskiwanie” – workflow „Studio – pozyskiwanie” nie jest aktywny.' : plError(e.message) }) } finally { setBusy(false) }
   }
