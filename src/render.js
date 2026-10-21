@@ -17,8 +17,9 @@ function rdMustache(tpl, ctx) {
       const open = t.indexOf('{{', i)
       if (open < 0) { out += t.slice(i); break }
       out += t.slice(i, open)
-      if (t.startsWith('{{{', open)) { const close = t.indexOf('}}}', open); const name = t.slice(open + 3, close).trim(); out += String(look(stack, name) ?? ''); i = close + 3; continue }
-      const close = t.indexOf('}}', open); const tag = t.slice(open + 2, close).trim(); i = close + 2
+      // niezamknięty znacznik ({{ bez }}) – reszta jako zwykły tekst (bez tego pętla nie miała końca)
+      if (t.startsWith('{{{', open)) { const close = t.indexOf('}}}', open); if (close < 0) { out += t.slice(open); break } const name = t.slice(open + 3, close).trim(); out += String(look(stack, name) ?? ''); i = close + 3; continue }
+      const close = t.indexOf('}}', open); if (close < 0) { out += t.slice(open); break } const tag = t.slice(open + 2, close).trim(); i = close + 2
       if (tag[0] === '#' || tag[0] === '^') {
         const name = tag.slice(1).trim(); let depth = 1, j = i, end = -1
         const re = /\{\{\s*([#^/])\s*([^}]+?)\s*\}\}/g; re.lastIndex = i; let m
