@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
-import { MODULES, moduleOfPath } from '../studio/modules.js'
+import { MODULES, moduleOfPath, SCREENS, screenOfPath } from '../studio/modules.js'
 import HelpDrawer from '../help/HelpDrawer.jsx'
 import JobOverlay from './JobOverlay.jsx'
 import { APP_VERSION } from '../version.js'
@@ -29,7 +29,18 @@ export default function Layout({ profile }) {
   const reloadVis = () => supabase.from('app_modules').select('key, team_visible').then(r => { if (!r.error) setVis(Object.fromEntries((r.data || []).map(x => [x.key, x.team_visible]))) })
   useEffect(() => { reloadVis(); document.title = 'SchedpolAI eCommerce Studio' }, [])
   const admin = profile?.role === 'admin'
-  const mods = MODULES.filter(m => admin || vis[m.key])
+  // dostęp do zakładek: tryb domyślny (wg roli i widoczności modułów) albo własna lista zakładek
+  const [acc, setAcc] = useState({ custom: false, screens: new Set(), ready: false })
+  useEffect(() => { if (!profile?.id) return; Promise.all([
+    supabase.from('profiles').select('screens_custom').eq('id', profile.id).maybeSingle(),
+    supabase.from('user_screens').select('screen').eq('user_id', profile.id),
+  ]).then(([p, s]) => setAcc({ custom: !!p.data?.screens_custom && !p.error, screens: new Set((s.data || []).map(x => x.screen)), ready: true })) }, [profile?.id])
+  const canSee = key => admin || !acc.custom || acc.screens.has(key)
+  const canSeeModule = m => admin || (acc.custom ? SCREENS.some(x => x.module === m.key && acc.screens.has(x.key)) : !!vis[m.key])
+  const mods = MODULES.filter(canSeeModule)
+  const curScreen = screenOfPath(loc.pathname)
+  const screenKeyOf = to => SCREENS.find(x => x.to === to)?.key
+  const blocked = acc.ready && curScreen && !canSee(curScreen.key) || (acc.ready && ['/ustawienia', '/uzytkownicy'].some(x => loc.pathname.startsWith(x)) && !admin)
   const cur = moduleOfPath(loc.pathname)
   useEffect(() => {
     supabase.from('descriptions').select('id', { count: 'exact', head: true }).in('status', ['do_weryfikacji', 'poprawki']).then(r => setReview(r.count || 0))
@@ -54,7 +65,7 @@ export default function Layout({ profile }) {
         </nav>
         {cur?.key === 'tresci' && (
           <nav aria-label="Generator Treści" className="sub-nav">
-            {GROUPS.map(g => ({ ...g, items: g.items.filter(n => !n.admin || admin) })).filter(g => g.items.length).map(g => (
+            {GROUPS.map(g => ({ ...g, items: g.items.filter(n => (!n.admin || admin) && canSee(screenKeyOf(n.to))) })).filter(g => g.items.length).map(g => (
               <div key={g.label} className="nav-group">
                 <span className="nav-group-label">{g.label}</span>
                 {g.items.map(n => (
@@ -68,7 +79,7 @@ export default function Layout({ profile }) {
         )}
         {cur?.menu && (
           <nav aria-label={cur.name} className="sub-nav">
-            <div className="nav-group">{cur.menu.map(n => <NavLink key={n.to} to={n.to} end={!!n.end} className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>{n.label}</NavLink>)}</div>
+            <div className="nav-group">{cur.menu.filter(n => canSee(screenKeyOf(n.to))).map(n => <NavLink key={n.to} to={n.to} end={!!n.end} className={({ isActive }) => 'nav-link' + (isActive ? ' active' : '')}>{n.label}</NavLink>)}</div>
           </nav>
         )}
         {admin && (
@@ -91,7 +102,9 @@ export default function Layout({ profile }) {
         </div>
       </aside>
       <main className="content">
-        <Outlet context={{ vis, reloadVis }} />
+        {blocked
+          ? <section className="page"><h1>Brak dostępu</h1><p className="muted">Nie masz dostępu do zakładki „{curScreen?.label || 'Administracja'}”. Jeśli jest Ci potrzebna, poproś administratora o jej przyznanie (Użytkownicy → Dostęp do zakładek).</p></section>
+          : <Outlet context={{ vis, reloadVis, canSeeModule }} />}
       </main>
       <HelpDrawer open={help && loc.pathname !== '/pomoc'} onClose={() => setHelp(false)} />
       <JobOverlay />

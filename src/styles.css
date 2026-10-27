@@ -746,3 +746,19 @@ tr.current-list td { background: #F3F8F5; }
 .block-label textarea { font: inherit; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
 .tag.pot-A { background: #E3F2EA; color: #1F5E41; } .tag.pot-B { background: #EAF0FA; color: #24477F; } .tag.pot-C { background: #F2F4F8; color: var(--ink-soft); }
 .lead-add { margin-top: 12px; }
+/* Dostęp do zakładek */
+.access-row td { background: #F7F9FC; }
+.access-box { padding: 6px 4px; }
+.access-mode { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; }
+.access-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 18px; margin: 6px 0 10px; }
+.access-mod { display: flex; flex-direction: column; gap: 3px; }
+.access-mod-head .tag { margin-left: 6px; }
+.access-item { padding-left: 22px; }
+/* Księga wiedzy: masowe usuwanie */
+.fact { position: relative; }
+.fact-check { position: absolute; top: 12px; left: -30px; }
+.fact-check input { width: 18px; height: 18px; cursor: pointer; }
+.fact-selected { outline: 2px solid #F1C4BF; background: #FFF8F7; }
+.fact-tools { padding: 12px 14px; }
+.fact-bulk { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); align-items: center; }
+@media (max-width: 1100px) { .fact-check { position: static; display: block; margin-bottom: 6px; } }

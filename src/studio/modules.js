@@ -35,3 +35,29 @@ export const moduleOfPath = path => {
   if (path === '/' || path === '') return null
   return MODULES.find(m => (m.prefixes || [m.home]).some(p => path === p || path.startsWith(p + '/'))) || null
 }
+
+// Zakładki, do których admin może nadawać dostęp (Ustawienia i Użytkownicy – tylko admin)
+export const SCREENS = [
+  { key: 'tresci', module: 'tresci', label: 'Dashboard', to: '/tresci' },
+  { key: 'drzewo', module: 'tresci', label: 'Drzewo produktów', to: '/drzewo' },
+  { key: 'produkty', module: 'tresci', label: 'Produkty', to: '/produkty' },
+  { key: 'wiedza', module: 'tresci', label: 'Księga wiedzy', to: '/wiedza' },
+  { key: 'frazy', module: 'tresci', label: 'Frazy kluczowe', to: '/frazy' },
+  { key: 'szablony', module: 'tresci', label: 'Szablony', to: '/szablony' },
+  { key: 'biblioteka', module: 'tresci', label: 'Biblioteka grafik', to: '/biblioteka' },
+  { key: 'grafiki', module: 'tresci', label: 'Grafiki na FTP', to: '/grafiki' },
+  { key: 'weryfikacja', module: 'tresci', label: 'Weryfikacja', to: '/weryfikacja' },
+  { key: 'nauka', module: 'tresci', label: 'Nauka z uwag', to: '/nauka' },
+  { key: 'publikacja', module: 'tresci', label: 'Publikacja', to: '/publikacja' },
+  { key: 'parametry', module: 'tresci', label: 'Parametry Base', to: '/parametry' },
+  { key: 'slownik', module: 'tresci', label: 'Słownik importu', to: '/slownik' },
+  { key: 'reguly', module: 'tresci', label: 'Reguły QA', to: '/reguly' },
+  { key: 'oferta', module: 'oferta', label: 'Oferta i kanały', to: '/oferta' },
+  { key: 'pozyskiwanie', module: 'pozyskiwanie', label: 'Pozyskiwanie klientów', to: '/pozyskiwanie' },
+  { key: 'ceny', module: 'ceny', label: 'Ceny u partnerów', to: '/ceny' },
+  { key: 'cenniki', module: 'ceny', label: 'Produkty i cenniki', to: '/ceny/cenniki' },
+  { key: 'operacje', module: 'operacje', label: 'Operacje (KPI)', to: '/operacje' },
+  { key: 'analityka', module: 'analityka', label: 'Analityka', to: '/analityka' },
+]
+// Zakładka dla adresu (najdłuższe dopasowanie; „/ceny/cenniki” przed „/ceny”)
+export const screenOfPath = path => [...SCREENS].sort((a, b) => b.to.length - a.to.length).find(s => path === s.to || path.startsWith(s.to + '/')) || null

@@ -65,7 +65,7 @@ function reach(fact, ctx) {
   return fams.length ? `Dotyczy: ${fams.map(f => f.model_name).join(', ')}` : ''
 }
 
-function FactCard({ fact, ctx, canApprove, onChanged }) {
+function FactCard({ fact, ctx, canApprove, onChanged, selectable, selected, onToggle }) {
   const [content, setContent] = useState(fact.content)
   const [source, setSource] = useState(fact.source || '')
   const [err, setErr] = useState('')
@@ -84,7 +84,8 @@ function FactCard({ fact, ctx, canApprove, onChanged }) {
   }
 
   return (
-    <article className="fact">
+    <article className={'fact' + (selected ? ' fact-selected' : '')}>
+      {selectable && <label className="fact-check" title="Zaznacz do usunięcia"><input type="checkbox" checked={!!selected} onChange={() => onToggle(fact.id)} aria-label="Zaznacz fakt" /></label>}
       <div className="fact-main">
         <textarea value={content} onChange={e => setContent(e.target.value)} rows={Math.max(2, Math.ceil(content.length / 90))} aria-label="Treść faktu" />
         <p className="fact-meta">
@@ -308,14 +309,20 @@ function Technologies({ data, admin, onChanged }) {
 }
 
 export default function Knowledge({ profile }) {
-  const [tab, setTab] = useState('do_akceptacji')
+  const [tab, setTabRaw] = useState('do_akceptacji')
+  const [sel, setSel] = useState(new Set())
+  const [flt, setFlt] = useState({ q: '', doc: '', level: '' })
+  const [delMsg, setDelMsg] = useState(null)
+  const [deleting, setDeleting] = useState(false)
+  const setTab = k => { setTabRaw(k); setSel(new Set()); setDelMsg(null) }
+  const isAdmin = profile?.role === 'admin'
   const [data, setData] = useState(null)
   const [error, setError] = useState('')
   const canApprove = ['akceptujacy', 'admin'].includes(profile?.role)
 
   async function load() {
     const [f, b, fam, d, tq, pr, as, mq] = await Promise.all([
-      supabase.from('kb_facts').select('*').order('created_at'),
+      fetchAll('kb_facts', '*', q => q.order('created_at')).then(data => ({ data }), error => ({ error })),   // wszystkie fakty (pojedyncze zapytanie zwraca maks. 1000)
       supabase.from('brands').select('id, name'),
       supabase.from('product_families').select('id, brand_id, model_name, series, category, technologies').order('model_name'),
       supabase.from('kb_documents').select('*').order('created_at', { ascending: false }),
@@ -354,7 +361,33 @@ export default function Knowledge({ profile }) {
   if (!data) return <section className="page"><DrainLoader /></section>
 
   const count = s => data.facts.filter(f => f.status === s).length
-  const shown = data.facts.filter(f => f.status === tab)
+  const ql = flt.q.trim().toLowerCase()
+  const shown = data.facts.filter(f => f.status === tab
+    && (!flt.doc || (flt.doc === 'reczne' ? !f.document_id : f.document_id === flt.doc))
+    && (!flt.level || f.level === flt.level)
+    && (!ql || [f.content, f.source, f.source_note, f.technology, f.series, f.category].some(x => String(x || '').toLowerCase().includes(ql))))
+  const inTab = data.facts.filter(f => f.status === tab)
+  const docsInTab = data.docs.filter(d => inTab.some(f => f.document_id === d.id))
+  const selShown = shown.filter(f => sel.has(f.id))
+  const allShown = shown.length > 0 && selShown.length === shown.length
+  const toggle = id => setSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggleAll = () => setSel(s => { const n = new Set(s); if (allShown) shown.forEach(f => n.delete(f.id)); else shown.forEach(f => n.add(f.id)); return n })
+  const faktow = n => `${n} ${n === 1 ? 'fakt' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'fakty' : 'faktów'}`
+  async function removeSelected() {
+    const ids = selShown.map(f => f.id); if (!ids.length) return
+    if (!confirm(`Usunąć ${faktow(ids.length)} z Księgi wiedzy?\n\nFakty zostaną trwale usunięte z bazy i przestaną trafiać do nowo generowanych opisów. Opisy już wygenerowane się nie zmienią. Tej operacji nie można cofnąć.`)) return
+    setDeleting(true); setDelMsg(null)
+    let done = 0
+    try {
+      for (let i = 0; i < ids.length; i += 200) {
+        const { error, count } = await supabase.from('kb_facts').delete({ count: 'exact' }).in('id', ids.slice(i, i + 200))
+        if (error) throw error
+        done += count ?? 0
+      }
+      setDelMsg(done === ids.length ? { type: 'ok', text: `Usunięto ${faktow(done)}.` } : { type: 'error', text: `Usunięto ${done} z ${ids.length} – pozostałych nie udało się usunąć (sprawdź uprawnienia).` })
+      setSel(new Set()); await load()
+    } catch (e) { setDelMsg({ type: 'error', text: plError(e.message) }); await load() } finally { setDeleting(false) }
+  }
 
   return (
     <section className="page">
@@ -373,8 +406,30 @@ export default function Knowledge({ profile }) {
           {tab === 'do_akceptacji' && data.facts.some(f => f.level === 'technologia' && !data.families.some(fam => applies(f, fam, data.families))) &&
             <p className="hint">Fakty o technologii trafiają do rodzin, którym tę technologię przypiszesz na ekranie Produkty. Przypisuj wyłącznie technologie, które rodzina faktycznie ma – inaczej fakty trafią do niewłaściwych opisów.</p>}
           {tab === 'do_akceptacji' && <AddFact ctx={ctx} onAdded={load} />}
-          {shown.length === 0 && <div className="panel empty"><p className="muted">Brak faktów w tej zakładce.</p></div>}
-          {shown.map(f => <FactCard key={f.id + f.status + (f.source || '') + f.content} fact={f} ctx={ctx} canApprove={canApprove} onChanged={load} />)}
+          {inTab.length > 0 && <div className="panel fact-tools">
+            <div className="filters">
+              <input placeholder="Szukaj w treści, źródle, technologii…" value={flt.q} onChange={e => setFlt({ ...flt, q: e.target.value })} />
+              <select value={flt.doc} onChange={e => setFlt({ ...flt, doc: e.target.value })} aria-label="Dokument źródłowy">
+                <option value="">wszystkie źródła</option>
+                <option value="reczne">dodane ręcznie / z nauki</option>
+                {docsInTab.map(d => <option key={d.id} value={d.id}>{d.file_name}</option>)}
+              </select>
+              <select value={flt.level} onChange={e => setFlt({ ...flt, level: e.target.value })} aria-label="Poziom">
+                <option value="">wszystkie poziomy</option>
+                {Object.entries(LEVEL_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+              </select>
+              {(flt.q || flt.doc || flt.level) && <button className="link-dark small" onClick={() => setFlt({ q: '', doc: '', level: '' })}>wyczyść filtry</button>}
+            </div>
+            {isAdmin && <div className="row-actions fact-bulk">
+              <label className="check"><input type="checkbox" checked={allShown} ref={el => { if (el) el.indeterminate = !allShown && selShown.length > 0 }} onChange={toggleAll} disabled={!shown.length} /> Zaznacz wszystkie widoczne ({shown.length})</label>
+              <span className="muted small">{selShown.length ? `zaznaczono: ${selShown.length}` : 'nic nie zaznaczono'}</span>
+              <button className="btn danger-btn small-btn" disabled={!selShown.length || deleting} onClick={removeSelected}>{deleting ? 'Usuwanie…' : `Usuń zaznaczone${selShown.length ? ` (${selShown.length})` : ''}`}</button>
+            </div>}
+            {!isAdmin && <p className="muted small">Fakty usuwa administrator.</p>}
+            {delMsg && <p className={delMsg.type} role="status">{delMsg.text}</p>}
+          </div>}
+          {shown.length === 0 && <div className="panel empty"><p className="muted">{inTab.length ? 'Brak faktów pasujących do filtrów.' : 'Brak faktów w tej zakładce.'}</p></div>}
+          {shown.map(f => <FactCard key={f.id + f.status + (f.source || '') + f.content} fact={f} ctx={ctx} canApprove={canApprove} onChanged={load} selectable={isAdmin} selected={sel.has(f.id)} onToggle={toggle} />)}
         </>
       )}
     </section>

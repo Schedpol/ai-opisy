@@ -4,10 +4,10 @@ import { supabase, plError } from '../supabase.js'
 import { MODULES } from '../studio/modules.js'
 
 export default function StudioHome({ profile }) {
-  const { vis, reloadVis: onVisChange } = useOutletContext()
+  const { vis, reloadVis: onVisChange, canSeeModule } = useOutletContext()
   const admin = profile?.role === 'admin'
   const [err, setErr] = useState('')
-  const shown = MODULES.filter(m => admin || vis[m.key])
+  const shown = MODULES.filter(m => admin || (canSeeModule ? canSeeModule(m) : vis[m.key]))
   async function toggle(m) {
     setErr('')
     const { error } = await supabase.from('app_modules').upsert({ key: m.key, team_visible: !vis[m.key], updated_at: new Date().toISOString() })
@@ -38,7 +38,7 @@ export default function StudioHome({ profile }) {
           </div>
         ))}
       </div>
-      {admin && <p className="muted small">Jako admin widzisz wszystkie moduły. Zespół widzi tylko te z zaznaczonym „widoczny dla zespołu” – włącz moduł, gdy będzie gotowy do pracy.</p>}
+      {admin && <p className="muted small">Jako admin widzisz wszystkie moduły. Zespół w trybie domyślnym widzi moduły z zaznaczonym „widoczny dla zespołu”; osoby z własnym dostępem (Użytkownicy → Dostęp do zakładek) widzą tylko przyznane zakładki.</p>}
     </section>
   )
 }
