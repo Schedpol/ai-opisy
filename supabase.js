@@ -26,3 +26,15 @@ export function plError(message = '') {
 }
 
 export const N8N_URL = import.meta.env.VITE_N8N_WEBHOOK_URL || ''
+
+// Pobiera wszystkie wiersze tabeli (Supabase zwraca domyślnie maks. 1000 na zapytanie)
+export async function fetchAll(table, cols, build = q => q) {
+  let out = [], from = 0
+  for (;;) {
+    const { data, error } = await build(supabase.from(table).select(cols)).range(from, from + 999)
+    if (error) throw error
+    out = out.concat(data || [])
+    if (!data || data.length < 1000) return out
+    from += 1000
+  }
+}
