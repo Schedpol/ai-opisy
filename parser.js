@@ -60,7 +60,7 @@ export function parseProducts(raw, brands, rules, pim = new Map()) {
       if (override && override.value !== fromName) flags.push(`Kształt z reguły słownika: ${override.value} (z nazwy wynikałby ${fromName})`)
     }
     // reguła „brak końcówki SKU” dotyczy brodzików – nie przenosimy jej na wanny, odpływy, nośniki
-    const isTray = !!m || /^brodziki/.test(pimCategory(pr) || '')
+    const isTray = !!m || /^(brodziki|wanny)/.test(pimCategory(pr) || '')   // „brak końcówki = Smooth White”: brodziki i wanny
     let fin = ruleFor(rules, brand?.id, 'wykonczenie', sku)
     if (fin && fin.match_type === 'suffix' && fin.pattern === '' && !isTray) fin = null
     if (fin) a.wykonczenie = fin.value
@@ -159,4 +159,21 @@ export function parseModel(name) {
   const m = n.match(NAME_RX)
   if (m) return { brand: m[1], model: m[3] }
   return { brand: n.split(' ')[0] || null, model: null }
+}
+
+// Wykończenie i powłoka wyliczone z samego SKU (dla produktów, których nie ma jeszcze w aplikacji)
+export function skuAttributes(sku, brandId, rules, category, shape) {
+  const a = {}
+  // kształt: reguła słownika (np. kod bazowy → pięciokątny) ma pierwszeństwo przed polem PIM
+  const sh = ruleFor(rules, brandId, 'ksztalt', sku)
+  if (sh) a.ksztalt = sh.value
+  shape = a.ksztalt || shape
+  const drain = ruleFor(rules, brandId, 'odplyw', sku)
+  if (drain && shape === 'prostokątny') a.odplyw = drain.value   // jak przy imporcie: odpływ tylko dla prostokątów
+  let fin = ruleFor(rules, brandId, 'wykonczenie', sku)
+  if (fin && fin.match_type === 'suffix' && fin.pattern === '' && !/^(brodziki|wanny)/.test(String(category || ''))) fin = null
+  if (fin) a.wykonczenie = fin.value
+  const coat = ruleFor(rules, brandId, 'powloka', sku)
+  if (coat) a.powloka = coat.value
+  return a
 }
