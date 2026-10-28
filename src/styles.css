@@ -785,3 +785,4 @@ tr.row-dirty td { background: #FFFBEA; }
 .offer-legend .st-ok { background: #EEF8F2; } .offer-legend .st-zatwierdzone { background: #DDF1E4; } .offer-legend .st-do_sprawdzenia { background: #FFF4D6; } .offer-legend .st-brak { background: #FDECEA; }
 .cell-editor { margin-top: 12px; }
 .cell-editor .cell-input, .cell-editor textarea { width: 100%; font: inherit; padding: 8px; }
+.req-must { font-weight: 600; }
