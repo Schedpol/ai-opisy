@@ -762,3 +762,8 @@ tr.current-list td { background: #F3F8F5; }
 .fact-tools { padding: 12px 14px; }
 .fact-bulk { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); align-items: center; }
 @media (max-width: 1100px) { .fact-check { position: static; display: block; margin-bottom: 6px; } }
+/* Weryfikacja: masowe usuwanie opisów */
+.check-cell { width: 34px; text-align: center; }
+.check-cell input { width: 17px; height: 17px; cursor: pointer; }
+tr.row-selected td { background: #FFF8F7; }
+.desc-bulk { margin-top: 0; padding-top: 0; border-top: none; gap: 14px; }
