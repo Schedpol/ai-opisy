@@ -65,6 +65,13 @@ function Templates({ templates, channels, brands, admin, onChanged, setMsg }) {
 }
 
 function Rules({ tpl, rules, sampleCtx, onSaved, setMsg }) {
+  // wymagalność pola można poprawić ręcznie (szablony eMAG bywają niespójne) – zapis w polach szablonu
+  async function setReq(f, level) {
+    const fields = tpl.fields.map(x => x.code !== f.code ? x : { ...x, mandatory: level === 'obowiazkowe', conditional: level === 'warunkowe', override: (x.override ?? x.req) })
+    const { error } = await supabase.from('channel_templates').update({ fields, updated_at: new Date().toISOString() }).eq('id', tpl.id)
+    setMsg(error ? { type: 'error', text: plError(error.message) } : { type: 'ok', text: `„${fname(f.label)}” – teraz ${level === 'obowiazkowe' ? 'obowiązkowe' : level === 'warunkowe' ? 'warunkowe' : 'opcjonalne'}.` })
+    if (!error) onSaved()
+  }
   const [rows, setRows] = useState(rules), [dirty, setDirty] = useState(new Set())
   useEffect(() => { setRows(rules); setDirty(new Set()) }, [rules])
   const set = (code, patch) => { setRows(r => r.map(x => x.code === code ? { ...x, ...patch, config: { ...x.config, ...(patch.config || {}) } } : x)); setDirty(d => new Set(d).add(code)) }
@@ -84,7 +91,9 @@ function Rules({ tpl, rules, sampleCtx, onSaved, setMsg }) {
           return (
             <tr key={f.code} className={dirty.has(f.code) ? 'row-dirty' : ''}>
               <td><strong>{f.label}</strong><div className="muted small mono">{fname(f.code)}{f.values ? ` · lista ${f.values.length}${f.restrictive ? ' (zamknięta)' : ''}` : ''}</div></td>
-              <td className="small">{f.mandatory ? <strong>obowiązkowe</strong> : f.conditional ? 'warunkowe' : 'opcjonalne'}</td>
+              <td className="small"><select className={f.mandatory ? 'req-must' : ''} value={f.mandatory ? 'obowiazkowe' : f.conditional ? 'warunkowe' : 'opcjonalne'} onChange={e => setReq(f, e.target.value)} aria-label="Wymagalność pola">
+                <option value="obowiazkowe">obowiązkowe</option><option value="warunkowe">warunkowe</option><option value="opcjonalne">opcjonalne</option></select>
+                {f.override && <div className="muted small" title="Zmieniono ręcznie">w szablonie eMAG: {f.override}</div>}</td>
               <td><select value={r.source} onChange={e => set(f.code, { source: e.target.value })}>{Object.entries(SOURCES).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select></td>
               <td className="rule-cfg">
                 {r.source === 'pole' && <select value={c.key || ''} onChange={e => set(f.code, { config: { key: e.target.value } })}>{Object.entries(PRODUCT_FIELDS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}</select>}
