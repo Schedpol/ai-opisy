@@ -767,3 +767,21 @@ tr.current-list td { background: #F3F8F5; }
 .check-cell input { width: 17px; height: 17px; cursor: pointer; }
 tr.row-selected td { background: #FFF8F7; }
 .desc-bulk { margin-top: 0; padding-top: 0; border-top: none; gap: 14px; }
+/* Oferta i kanały */
+.tpl-add { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); }
+.rules-table td { vertical-align: top; }
+.rule-cfg { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-width: 560px; }
+.rule-cfg .map-input { width: 260px; }
+tr.row-dirty td { background: #FFFBEA; }
+.sticky-save { position: sticky; bottom: 0; background: var(--bg, #fff); padding: 8px 0; }
+.offer-grid-wrap { max-height: 70vh; overflow: auto; }
+.offer-grid th { white-space: nowrap; font-size: 12px; position: sticky; top: 0; background: #fff; z-index: 1; }
+.offer-grid td { white-space: nowrap; font-size: 12px; cursor: pointer; }
+.offer-grid .sticky-col { position: sticky; left: 0; background: #fff; z-index: 2; min-width: 190px; cursor: default; }
+.st-cell.st-ok { background: #EEF8F2; } .st-cell.st-zatwierdzone { background: #DDF1E4; font-weight: 600; }
+.st-cell.st-do_sprawdzenia { background: #FFF4D6; } .st-cell.st-brak { background: #FDECEA; } .st-cell.st-none { color: var(--ink-soft); }
+.offer-legend { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.offer-legend .lg { padding: 2px 8px; border-radius: 10px; }
+.offer-legend .st-ok { background: #EEF8F2; } .offer-legend .st-zatwierdzone { background: #DDF1E4; } .offer-legend .st-do_sprawdzenia { background: #FFF4D6; } .offer-legend .st-brak { background: #FDECEA; }
+.cell-editor { margin-top: 12px; }
+.cell-editor .cell-input, .cell-editor textarea { width: 100%; font: inherit; padding: 8px; }

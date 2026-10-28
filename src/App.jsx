@@ -25,6 +25,7 @@ import Analytics from './pages/Analytics.jsx'
 import Prices from './pages/Prices.jsx'
 import PriceBase from './pages/PriceBase.jsx'
 import Leads from './pages/Leads.jsx'
+import Offer from './pages/Offer.jsx'
 import Settings from './pages/Settings.jsx'
 import QaRules from './pages/QaRules.jsx'
 import Tree from './pages/Tree.jsx'
@@ -68,7 +69,7 @@ export default function App() {
           <Route index element={<StudioHome profile={profile} />} />
           <Route path="tresci" element={<Dashboard profile={profile} />} />
           <Route path="analityka" element={<Analytics profile={profile} />} />
-          <Route path="oferta" element={<ModulePage moduleKey="oferta" />} />
+          <Route path="oferta" element={<Offer profile={profile} />} />
           <Route path="pozyskiwanie" element={<Leads profile={profile} />} />
           <Route path="ceny" element={<Prices profile={profile} />} />
           <Route path="ceny/cenniki" element={<PriceBase profile={profile} />} />
