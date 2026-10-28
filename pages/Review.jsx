@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { supabase, plError } from '../supabase.js'
+import { supabase, plError, fetchAll } from '../supabase.js'
 import { regenerateSections, generateVariants } from '../gen.js'
 import DrainLoader from '../components/DrainLoader.jsx'
 
@@ -16,18 +16,59 @@ function useLookups() {
   return l
 }
 
-function ReviewList() {
-  const [rows, setRows] = useState(null)
-  const [filter, setFilter] = useState('do_weryfikacji')
+const opisow = n => `${n} ${n === 1 ? 'opis' : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? 'opisy' : 'opisów'}`
+
+function ReviewList({ profile }) {
+  const [all, setAll] = useState(null)
+  const [filter, setFilterRaw] = useState('do_weryfikacji')
+  const [sel, setSel] = useState(new Set())
+  const [withVariants, setWithVariants] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [msg, setMsg] = useState(null)
   const lk = useLookups()
-  useEffect(() => { (async () => {
-    const { data } = await supabase.from('descriptions').select('id, family_id, channel_id, product_id, version, status, qa, created_at, is_base').order('version', { ascending: false })
-    const latest = {}
-    for (const d of data || []) { const k = `${d.family_id}|${d.channel_id}|${d.product_id}`; if (!latest[k]) latest[k] = d }
-    setRows(Object.values(latest).sort((a, b) => b.created_at.localeCompare(a.created_at)))
-  })() }, [])
-  if (!rows || !lk) return <section className="page"><DrainLoader /></section>
+  const admin = profile?.role === 'admin'
+  const setFilter = k => { setFilterRaw(k); setSel(new Set()) }
+  // wszystkie wersje (pojedyncze zapytanie zwraca maks. 1000 wierszy)
+  const load = () => fetchAll('descriptions', 'id, family_id, channel_id, product_id, version, status, qa, created_at, is_base, published_at', q => q.order('version', { ascending: false })).then(setAll).catch(e => setMsg({ type: 'error', text: plError(e.message) }))
+  useEffect(() => { load() }, [])
+  if (!all || !lk) return <section className="page"><DrainLoader /></section>
+  const latest = {}
+  for (const d of all) { const k = `${d.family_id}|${d.channel_id}|${d.product_id}`; if (!latest[k]) latest[k] = d }
+  const rows = Object.values(latest).sort((a, b) => b.created_at.localeCompare(a.created_at))
   const shown = filter === 'wszystkie' ? rows : rows.filter(r => r.status === filter || (filter === 'do_weryfikacji' && r.status === 'generowanie'))
+  const selShown = shown.filter(r => sel.has(r.id)), allShown = shown.length > 0 && selShown.length === shown.length
+  const toggle = id => setSel(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  const toggleAll = () => setSel(s => { const n = new Set(s); if (allShown) shown.forEach(r => n.delete(r.id)); else shown.forEach(r => n.add(r.id)); return n })
+
+  // co faktycznie zostanie usunięte: wszystkie wersje zaznaczonych opisów (+ warianty opisów bazowych)
+  const plan = () => {
+    const keys = new Set(selShown.map(r => `${r.family_id}|${r.channel_id}|${r.product_id}`))
+    const baseFc = new Set(selShown.filter(r => r.is_base).map(r => `${r.family_id}|${r.channel_id}`))
+    const rowsDel = all.filter(d => keys.has(`${d.family_id}|${d.channel_id}|${d.product_id}`) || (withVariants && !d.is_base && baseFc.has(`${d.family_id}|${d.channel_id}`)))
+    const descKeys = new Set(rowsDel.map(d => `${d.family_id}|${d.channel_id}|${d.product_id}`))
+    return { ids: rowsDel.map(d => d.id), descs: descKeys.size, variants: [...descKeys].filter(k => !keys.has(k)).length, published: new Set(rowsDel.filter(d => d.published_at || d.status === 'opublikowany').map(d => `${d.family_id}|${d.channel_id}|${d.product_id}`)).size, generating: rowsDel.filter(d => d.status === 'generowanie').length }
+  }
+  async function removeSelected() {
+    const pl = plan(); if (!pl.ids.length) return
+    const lines = [`Usunąć ${opisow(pl.descs)} (${pl.ids.length} ${pl.ids.length === 1 ? 'wersja' : 'wersji'} w bazie)?`]
+    if (pl.variants) lines.push(`• w tym warianty wygenerowane z zaznaczonych opisów bazowych: ${pl.variants}`)
+    if (pl.published) lines.push(`• ${opisow(pl.published)} ${pl.published === 1 ? 'był opublikowany' : 'było opublikowanych'} – usunięcie ze Studio NIE usuwa ${pl.published === 1 ? 'go' : 'ich'} z Baselinkera ani z marketplace'ów`)
+    if (pl.generating) lines.push(`• ${pl.generating} jest właśnie generowanych – wynik generowania przepadnie`)
+    lines.push('• uwagi z weryfikacji do tych opisów też zostaną usunięte (reguły w Nauce z uwag zostają)', '', 'Tej operacji nie można cofnąć.')
+    if (!confirm(lines.join('\n'))) return
+    setBusy(true); setMsg(null)
+    let done = 0
+    try {
+      for (let i = 0; i < pl.ids.length; i += 200) {
+        const { error, count } = await supabase.from('descriptions').delete({ count: 'exact' }).in('id', pl.ids.slice(i, i + 200))
+        if (error) throw error
+        done += count ?? 0
+      }
+      setMsg(done === pl.ids.length ? { type: 'ok', text: `Usunięto ${opisow(pl.descs)} (${done} wersji).` } : { type: 'error', text: `Usunięto ${done} z ${pl.ids.length} wersji – pozostałych nie udało się usunąć (sprawdź uprawnienia).` })
+      setSel(new Set()); await load()
+    } catch (e) { setMsg({ type: 'error', text: plError(e.message) }); await load() } finally { setBusy(false) }
+  }
+  const pl = selShown.length ? plan() : null
   return (
     <section className="page">
       <h1>Weryfikacja</h1>
@@ -35,14 +76,25 @@ function ReviewList() {
         {FILTERS.map(([k, l]) => <button key={k} role="tab" aria-selected={filter === k} className={filter === k ? 'tab on' : 'tab'} onClick={() => setFilter(k)}>{l}
           <span className="count">{k === 'wszystkie' ? rows.length : rows.filter(r => r.status === k || (k === 'do_weryfikacji' && r.status === 'generowanie')).length}</span></button>)}
       </div>
+      {admin && shown.length > 0 && <div className="panel fact-tools">
+        <div className="row-actions fact-bulk desc-bulk">
+          <label className="check"><input type="checkbox" checked={allShown} ref={el => { if (el) el.indeterminate = !allShown && selShown.length > 0 }} onChange={toggleAll} /> Zaznacz wszystkie widoczne ({shown.length})</label>
+          <label className="check small"><input type="checkbox" checked={withVariants} onChange={e => setWithVariants(e.target.checked)} /> razem z wariantami opisów bazowych</label>
+          <span className="muted small">{pl ? `zaznaczono: ${opisow(selShown.length)}${pl.variants ? ` + ${pl.variants} wariantów` : ''}` : 'nic nie zaznaczono'}</span>
+          <button className="btn danger-btn small-btn" disabled={!selShown.length || busy} onClick={removeSelected}>{busy ? 'Usuwanie…' : `Usuń zaznaczone${pl ? ` (${pl.descs})` : ''}`}</button>
+        </div>
+        <p className="muted small">Usuwane są wszystkie wersje zaznaczonych opisów. Opublikowane opisy zostają w Baselinkerze i na marketplace'ach.</p>
+      </div>}
+      {msg && <p className={msg.type} role="status">{msg.text}</p>}
       {shown.length === 0 ? <div className="panel empty"><p className="muted">Brak opisów. Opis bazowy generujesz na ekranie Produkty, przy rodzinie.</p></div> : (
         <div className="panel table-wrap">
           <table className="compact">
-            <thead><tr><th>Rodzina</th><th>SKU</th><th>Kanał</th><th>Wersja</th><th>Status</th><th>QA</th><th>Utworzono</th><th /></tr></thead>
+            <thead><tr>{admin && <th className="check-cell" />}<th>Rodzina</th><th>SKU</th><th>Kanał</th><th>Wersja</th><th>Status</th><th>QA</th><th>Utworzono</th><th /></tr></thead>
             <tbody>{shown.map(r => (
-              <tr key={r.id}>
+              <tr key={r.id} className={sel.has(r.id) ? 'row-selected' : ''}>
+                {admin && <td className="check-cell"><input type="checkbox" checked={sel.has(r.id)} onChange={() => toggle(r.id)} aria-label="Zaznacz opis" /></td>}
                 <td><strong>{lk.fam[r.family_id] || '—'}</strong>{r.is_base && <span className="tag">bazowy</span>}</td><td className="mono">{lk.sku[r.product_id]}</td><td>{lk.ch[r.channel_id]}</td><td>v{r.version}</td>
-                <td><span className={`tag st-${r.status}`}>{STATUS[r.status]}</span></td>
+                <td><span className={`tag st-${r.status}`}>{STATUS[r.status]}</span>{r.published_at && r.status !== 'opublikowany' && <span className="muted small"> · był publikowany</span>}</td>
                 <td>{r.qa ? <>{r.qa.errors?.length ? <span className="tag err">{r.qa.errors.length} błędy</span> : <span className="tag okt">OK</span>} {r.qa.warnings?.length ? <span className="muted small">{r.qa.warnings.length} uwag</span> : null}</> : '—'}</td>
                 <td className="muted">{new Date(r.created_at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}</td>
                 <td><Link to={`/weryfikacja/${r.id}`}>Otwórz</Link></td>
@@ -232,5 +284,5 @@ function ReviewDetail({ id, profile }) {
 
 export default function Review({ profile }) {
   const { id } = useParams()
-  return id ? <ReviewDetail id={id} profile={profile} /> : <ReviewList />
+  return id ? <ReviewDetail id={id} profile={profile} /> : <ReviewList profile={profile} />
 }
